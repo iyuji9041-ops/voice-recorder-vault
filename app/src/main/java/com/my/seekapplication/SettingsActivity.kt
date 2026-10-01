@@ -105,7 +105,7 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun showPrivacyPolicyDialog() {
-        val policyUrl = "https://github.com/mysecurevault/voice-recorder-vault/blob/main/PRIVACY_POLICY.md"
+        val policyUrl = "https://iyuji9041-ops.github.io/voice-recorder-vault/"
         AlertDialog.Builder(this)
             .setTitle("Privacy & Security Guarantee")
             .setMessage("100% OFFLINE ZERO-DATA POLICY\n\n• Zero Cloud Uploads: Your recordings and hidden vault files never leave your device.\n• AES-256-GCM Encryption: Photos, videos, and audios are locally encrypted.\n• Local Permissions Only: Camera and Microphone are used strictly on-device for recordings and security intruder selfies.\n\nOur full open-source privacy policy is available online.")

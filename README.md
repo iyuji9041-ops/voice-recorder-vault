@@ -177,7 +177,7 @@ Verified using v2 scheme (APK Signature Scheme v2): true
 
 2. **Add Remote & Push**:
    ```bash
-   git remote add origin https://github.com/<YOUR_USERNAME>/<YOUR_REPOSITORY>.git
+   git remote add origin https://github.com/iyuji9041-ops/voice-recorder-vault.git
    git branch -M main
    git push -u origin main
    ```
@@ -186,7 +186,7 @@ Verified using v2 scheme (APK Signature Scheme v2): true
    - In your GitHub repository, navigate to **Settings** > **Pages**.
    - Under **Source**, select `Deploy from a branch`.
    - Branch: `main`, Folder: `/docs`.
-   - Click **Save**. Your privacy policy will be live at `https://<YOUR_USERNAME>.github.io/<YOUR_REPOSITORY>/`.
+   - Click **Save**. Your privacy policy will be live at `https://iyuji9041-ops.github.io/voice-recorder-vault/`.
 
 ---
 
