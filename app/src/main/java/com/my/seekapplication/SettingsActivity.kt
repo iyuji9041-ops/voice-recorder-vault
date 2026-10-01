@@ -1,0 +1,536 @@
+package com.my.seekapplication
+
+import android.app.Dialog
+import android.content.Intent
+import android.graphics.Color
+import android.os.Bundle
+import android.text.InputType
+import android.view.View
+import android.view.WindowManager
+import android.widget.Button
+import android.widget.EditText
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.RelativeLayout
+import android.widget.TextView
+import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+
+/**
+ * SettingsActivity: Vault configuration screen for changing lock types (PIN, Pattern, Password),
+ * updating master/decoy keys, configuring secret trigger hold duration, door passcodes, and security recovery.
+ */
+class SettingsActivity : AppCompatActivity() {
+
+    private lateinit var tvCurrentLockType: TextView
+    private lateinit var tvRealKeyTitle: TextView
+    private lateinit var tvFakeKeyTitle: TextView
+    private lateinit var tvCurrentHoldDuration: TextView
+
+    private var tempRealKeySetup: String? = null
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        // FLAG_SECURE prevents screenshots and screen recording
+        window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
+        supportActionBar?.hide()
+        window.navigationBarColor = Color.parseColor("#0A0A0A")
+        window.statusBarColor = Color.parseColor("#0A0A0A")
+
+        setContentView(R.layout.activity_settings)
+
+        val root = findViewById<LinearLayout>(R.id.rootSettings)
+
+        // Android 16 Window Insets: avoid edge squishing
+        ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
+            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+            root.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
+            insets
+        }
+
+        val btnBack = findViewById<ImageView>(R.id.btnBackSettings)
+        val btnChangeLockType = findViewById<LinearLayout>(R.id.btnChangeLockType)
+        val btnChangeReal = findViewById<LinearLayout>(R.id.btnChangeRealPassword)
+        val btnChangeFake = findViewById<LinearLayout>(R.id.btnChangeFakePassword)
+        val btnChangeHold = findViewById<LinearLayout>(R.id.btnChangeHoldDuration)
+        val btnChangeDoor = findViewById<LinearLayout>(R.id.btnChangeDoorPasscode)
+        val btnChangeRecovery = findViewById<LinearLayout>(R.id.btnChangeRecoveryQuestion)
+        val btnIntruderSelfie = findViewById<LinearLayout>(R.id.btnIntruderSelfie)
+
+        tvCurrentLockType = findViewById(R.id.tvCurrentLockType)
+        tvRealKeyTitle = findViewById(R.id.tvRealKeyTitle)
+        tvFakeKeyTitle = findViewById(R.id.tvFakeKeyTitle)
+        tvCurrentHoldDuration = findViewById(R.id.tvCurrentHoldDuration)
+
+        btnBack.setOnClickListener { finish() }
+
+        refreshLabels()
+
+        btnChangeLockType.setOnClickListener {
+            showChooseLockTypeDialog()
+        }
+
+        btnChangeReal.setOnClickListener {
+            handleKeyUpdate(isReal = true)
+        }
+
+        btnChangeFake.setOnClickListener {
+            handleKeyUpdate(isReal = false)
+        }
+
+        btnChangeHold.setOnClickListener {
+            showHoldDurationDialog()
+        }
+
+        btnChangeDoor.setOnClickListener {
+            showDoorPasscodeDialog()
+        }
+
+        btnChangeRecovery.setOnClickListener {
+            showRecoveryQuestionDialog()
+        }
+
+        btnIntruderSelfie.setOnClickListener {
+            startActivity(Intent(this, IntruderListActivity::class.java))
+        }
+
+        val btnPrivacyPolicy = findViewById<View>(R.id.btnPrivacyPolicy)
+        btnPrivacyPolicy?.setOnClickListener {
+            showPrivacyPolicyDialog()
+        }
+    }
+
+    private fun showPrivacyPolicyDialog() {
+        val policyUrl = "https://github.com/mysecurevault/voice-recorder-vault/blob/main/PRIVACY_POLICY.md"
+        AlertDialog.Builder(this)
+            .setTitle("Privacy & Security Guarantee")
+            .setMessage("100% OFFLINE ZERO-DATA POLICY\n\n• Zero Cloud Uploads: Your recordings and hidden vault files never leave your device.\n• AES-256-GCM Encryption: Photos, videos, and audios are locally encrypted.\n• Local Permissions Only: Camera and Microphone are used strictly on-device for recordings and security intruder selfies.\n\nOur full open-source privacy policy is available online.")
+            .setPositiveButton("Open Web Policy") { _, _ ->
+                try {
+                    val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(policyUrl))
+                    startActivity(intent)
+                } catch (e: Exception) {
+                    Toast.makeText(this, "Policy URL: $policyUrl", Toast.LENGTH_LONG).show()
+                }
+            }
+            .setNegativeButton("Close", null)
+            .show()
+    }
+
+    private fun refreshLabels() {
+        val currentLockType = VaultSecurityManager.getLockType(this)
+        val typeName = when (currentLockType) {
+            VaultSecurityManager.LockType.PIN -> "4-Digit PIN"
+            VaultSecurityManager.LockType.PATTERN -> "3x3 Pattern Lock"
+            VaultSecurityManager.LockType.PASSWORD -> "Text Password"
+        }
+        tvCurrentLockType.text = "Current: $typeName"
+        tvRealKeyTitle.text = "Change Real $typeName"
+        tvFakeKeyTitle.text = "Change Fake $typeName"
+
+        val seconds = VaultSecurityManager.getHoldDurationSeconds(this)
+        tvCurrentHoldDuration.text = "Current: $seconds seconds"
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // SECRET HOLD DURATION PICKER
+    // ---------------------------------------------------------------------------------------------
+
+    private fun showHoldDurationDialog() {
+        val options = arrayOf("5 Seconds (Default)", "7 Seconds", "10 Seconds", "15 Seconds", "20 Seconds")
+        val values = intArrayOf(5, 7, 10, 15, 20)
+        val currentSec = VaultSecurityManager.getHoldDurationSeconds(this)
+        val checkedItem = values.indexOf(currentSec).takeIf { it >= 0 } ?: 0
+
+        AlertDialog.Builder(this)
+            .setTitle("Secret Trigger Hold Duration")
+            .setSingleChoiceItems(options, checkedItem) { dialog, which ->
+                val chosenSec = values[which]
+                VaultSecurityManager.setHoldDurationSeconds(this, chosenSec)
+                refreshLabels()
+                Toast.makeText(this, "Hold duration set to $chosenSec seconds.", Toast.LENGTH_SHORT).show()
+                dialog.dismiss()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // DOOR PASSCODE SETTING (LAYER 1)
+    // ---------------------------------------------------------------------------------------------
+
+    private fun showDoorPasscodeDialog() {
+        val dialog = Dialog(this)
+        dialog.setContentView(R.layout.dialog_door_passcode)
+        dialog.window?.let { window ->
+            window.setBackgroundDrawableResource(android.R.color.transparent)
+            window.setDimAmount(0.85f)
+            val dialogWidth = (resources.displayMetrics.widthPixels * 0.90).toInt().coerceAtMost((360 * resources.displayMetrics.density).toInt())
+            window.setLayout(dialogWidth, WindowManager.LayoutParams.WRAP_CONTENT)
+        }
+
+        val tvTitle = dialog.findViewById<TextView>(R.id.tvDoorTitle)
+        val tvSubtitle = dialog.findViewById<TextView>(R.id.tvDoorSubtitle)
+        val etInput = dialog.findViewById<EditText>(R.id.etDoorPasscodeInput)
+        val btnForgot = dialog.findViewById<TextView>(R.id.btnDoorForgotPassword)
+        val btnCancel = dialog.findViewById<Button>(R.id.btnCancelDoor)
+        val btnSubmit = dialog.findViewById<Button>(R.id.btnSubmitDoor)
+
+        tvTitle.text = "Update Door Passcode"
+        tvSubtitle.text = "Set new 4-digit code for Layer 1 entrance"
+        btnForgot.visibility = View.GONE
+
+        btnCancel.setOnClickListener { dialog.dismiss() }
+
+        btnSubmit.setOnClickListener {
+            val code = etInput.text.toString().trim()
+            if (code.length < 4) {
+                Toast.makeText(this, "Passcode must be at least 4 digits!", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            VaultSecurityManager.setDoorPasscode(this, code)
+            dialog.dismiss()
+            Toast.makeText(this, "Door Passcode updated successfully.", Toast.LENGTH_SHORT).show()
+        }
+
+        dialog.show()
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // RECOVERY QUESTION SETUP
+    // ---------------------------------------------------------------------------------------------
+
+    private fun showRecoveryQuestionDialog() {
+        val dialog = Dialog(this)
+        dialog.setContentView(R.layout.dialog_security_recovery)
+        dialog.window?.let { window ->
+            window.setBackgroundDrawableResource(android.R.color.transparent)
+            window.setDimAmount(0.85f)
+            val dialogWidth = (resources.displayMetrics.widthPixels * 0.90).toInt().coerceAtMost((360 * resources.displayMetrics.density).toInt())
+            window.setLayout(dialogWidth, WindowManager.LayoutParams.WRAP_CONTENT)
+        }
+
+        val tvTitle = dialog.findViewById<TextView>(R.id.tvRecoveryTitle)
+        val tvSubtitle = dialog.findViewById<TextView>(R.id.tvRecoverySubtitle)
+        val tvQuestion = dialog.findViewById<TextView>(R.id.tvQuestionDisplay)
+        val etAnswer = dialog.findViewById<EditText>(R.id.etRecoveryAnswer)
+        val btnCancel = dialog.findViewById<Button>(R.id.btnCancelRecovery)
+        val btnSubmit = dialog.findViewById<Button>(R.id.btnSubmitRecovery)
+
+        tvTitle.text = "Security Recovery Setup"
+        tvSubtitle.text = "Used to reset passwords if you ever forget them"
+        tvQuestion.text = "Security Question:\nWhat was your first school or favorite keyword?"
+        etAnswer.hint = "Your secret recovery answer"
+        btnSubmit.text = "SAVE ANSWER"
+
+        btnCancel.setOnClickListener { dialog.dismiss() }
+
+        btnSubmit.setOnClickListener {
+            val ans = etAnswer.text.toString().trim()
+            if (ans.length < 3) {
+                Toast.makeText(this, "Answer must be at least 3 characters!", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            VaultSecurityManager.setSecurityRecovery(this, "What was your first school or favorite keyword?", ans)
+            dialog.dismiss()
+            Toast.makeText(this, "Recovery question saved successfully.", Toast.LENGTH_SHORT).show()
+        }
+
+        dialog.show()
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // SWITCH LOCK TYPE DIALOG
+    // ---------------------------------------------------------------------------------------------
+
+    private fun showChooseLockTypeDialog() {
+        val dialog = Dialog(this)
+        dialog.setContentView(R.layout.dialog_choose_lock_type)
+        dialog.window?.let { window ->
+            window.setBackgroundDrawableResource(android.R.color.transparent)
+            window.setDimAmount(0.85f)
+            val dialogWidth = (resources.displayMetrics.widthPixels * 0.90).toInt().coerceAtMost((360 * resources.displayMetrics.density).toInt())
+            window.setLayout(dialogWidth, WindowManager.LayoutParams.WRAP_CONTENT)
+        }
+
+        dialog.findViewById<View>(R.id.btnSelectPin).setOnClickListener {
+            dialog.dismiss()
+            promptSwitchLockType(VaultSecurityManager.LockType.PIN)
+        }
+
+        dialog.findViewById<View>(R.id.btnSelectPattern).setOnClickListener {
+            dialog.dismiss()
+            promptSwitchLockType(VaultSecurityManager.LockType.PATTERN)
+        }
+
+        dialog.findViewById<View>(R.id.btnSelectPassword).setOnClickListener {
+            dialog.dismiss()
+            promptSwitchLockType(VaultSecurityManager.LockType.PASSWORD)
+        }
+
+        dialog.show()
+    }
+
+    private fun promptSwitchLockType(targetType: VaultSecurityManager.LockType) {
+        val currentType = VaultSecurityManager.getLockType(this)
+        if (targetType == currentType) {
+            Toast.makeText(this, "Vault is already using this lock type.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        when (targetType) {
+            VaultSecurityManager.LockType.PATTERN -> {
+                showSetupPatternDialog(isReal = true, onComplete = {
+                    VaultSecurityManager.setLockType(this, VaultSecurityManager.LockType.PATTERN)
+                    refreshLabels()
+                    Toast.makeText(this, "Switched to Pattern Lock successfully.", Toast.LENGTH_SHORT).show()
+                })
+            }
+            VaultSecurityManager.LockType.PIN -> {
+                showSetupTextDialog(isReal = true, isPin = true, onComplete = {
+                    VaultSecurityManager.setLockType(this, VaultSecurityManager.LockType.PIN)
+                    refreshLabels()
+                    Toast.makeText(this, "Switched to PIN Lock successfully.", Toast.LENGTH_SHORT).show()
+                })
+            }
+            VaultSecurityManager.LockType.PASSWORD -> {
+                showSetupTextDialog(isReal = true, isPin = false, onComplete = {
+                    VaultSecurityManager.setLockType(this, VaultSecurityManager.LockType.PASSWORD)
+                    refreshLabels()
+                    Toast.makeText(this, "Switched to Password Lock successfully.", Toast.LENGTH_SHORT).show()
+                })
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // KEY UPDATE HANDLERS FOR CURRENT LOCK TYPE
+    // ---------------------------------------------------------------------------------------------
+
+    private fun handleKeyUpdate(isReal: Boolean) {
+        val lockType = VaultSecurityManager.getLockType(this)
+        if (lockType == VaultSecurityManager.LockType.PATTERN) {
+            showChangePatternDialog(isReal)
+        } else {
+            showChangeTextDialog(isReal, isPin = (lockType == VaultSecurityManager.LockType.PIN))
+        }
+    }
+
+    private fun showChangePatternDialog(isReal: Boolean) {
+        val dialog = Dialog(this)
+        dialog.setContentView(R.layout.dialog_pattern_lock)
+        dialog.window?.let { window ->
+            window.setBackgroundDrawableResource(android.R.color.transparent)
+            window.setDimAmount(0.85f)
+            val dialogWidth = (resources.displayMetrics.widthPixels * 0.92).toInt().coerceAtMost((380 * resources.displayMetrics.density).toInt())
+            window.setLayout(dialogWidth, WindowManager.LayoutParams.WRAP_CONTENT)
+        }
+
+        val tvTitle = dialog.findViewById<TextView>(R.id.tvPatternTitle)
+        val tvSubtitle = dialog.findViewById<TextView>(R.id.tvPatternSubtitle)
+        val patternView = dialog.findViewById<PatternLockView>(R.id.patternLockView)
+        val btnCancel = dialog.findViewById<Button>(R.id.btnCancelPattern)
+
+        tvTitle.text = if (isReal) "Set New Real Pattern" else "Set New Fake Pattern"
+        tvSubtitle.text = "Connect at least 4 dots"
+
+        btnCancel.setOnClickListener { dialog.dismiss() }
+
+        patternView.onPatternListener = { pattern ->
+            if (pattern.length < 4) {
+                Toast.makeText(this, "Connect at least 4 dots!", Toast.LENGTH_SHORT).show()
+                patternView.setErrorState(true)
+                patternView.postDelayed({ patternView.resetPattern() }, 600)
+            } else {
+                val oppositeResult = VaultSecurityManager.checkPassword(this, pattern)
+                if (isReal && oppositeResult == VaultSecurityManager.PasswordCheckResult.DECOY) {
+                    Toast.makeText(this, "Real pattern cannot match current Fake pattern!", Toast.LENGTH_LONG).show()
+                    patternView.setErrorState(true)
+                    patternView.postDelayed({ patternView.resetPattern() }, 600)
+                } else if (!isReal && oppositeResult == VaultSecurityManager.PasswordCheckResult.REAL) {
+                    Toast.makeText(this, "Fake pattern cannot match current Real pattern!", Toast.LENGTH_LONG).show()
+                    patternView.setErrorState(true)
+                    patternView.postDelayed({ patternView.resetPattern() }, 600)
+                } else {
+                    VaultSecurityManager.setPassword(this, pattern, isReal)
+                    dialog.dismiss()
+                    Toast.makeText(this, "Pattern Updated Successfully.", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+        dialog.show()
+    }
+
+    private fun showChangeTextDialog(isReal: Boolean, isPin: Boolean) {
+        val dialog = Dialog(this)
+        dialog.setContentView(R.layout.dialog_glass_password)
+        dialog.window?.let { window ->
+            window.setBackgroundDrawableResource(android.R.color.transparent)
+            window.setDimAmount(0.85f)
+            val dialogWidth = (resources.displayMetrics.widthPixels * 0.90).toInt().coerceAtMost((360 * resources.displayMetrics.density).toInt())
+            window.setLayout(dialogWidth, WindowManager.LayoutParams.WRAP_CONTENT)
+        }
+
+        val dialogTitle = dialog.findViewById<TextView>(R.id.dialogTitle)
+        val dialogInput = dialog.findViewById<EditText>(R.id.dialogInput)
+        val dialogSetButton = dialog.findViewById<Button>(R.id.dialogSetButton)
+
+        val keyTypeName = if (isPin) "PIN" else "Password"
+        dialogTitle.text = if (isReal) "Set New Real $keyTypeName" else "Set New Fake $keyTypeName"
+        dialogSetButton.text = "UPDATE $keyTypeName"
+
+        if (isPin) {
+            dialogInput.inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+            dialogInput.hint = "New Numeric PIN"
+        } else {
+            dialogInput.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            dialogInput.hint = "New Password"
+        }
+
+        dialogSetButton.setOnClickListener {
+            val newKey = dialogInput.text.toString().trim()
+            val minLen = 4
+
+            if (newKey.length < minLen) {
+                Toast.makeText(this, "$keyTypeName must be at least $minLen characters", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            val oppositeResult = VaultSecurityManager.checkPassword(this, newKey)
+            if (isReal && oppositeResult == VaultSecurityManager.PasswordCheckResult.DECOY) {
+                Toast.makeText(this, "Real $keyTypeName cannot match current Fake $keyTypeName!", Toast.LENGTH_LONG).show()
+                return@setOnClickListener
+            }
+            if (!isReal && oppositeResult == VaultSecurityManager.PasswordCheckResult.REAL) {
+                Toast.makeText(this, "Fake $keyTypeName cannot match current Real $keyTypeName!", Toast.LENGTH_LONG).show()
+                return@setOnClickListener
+            }
+
+            VaultSecurityManager.setPassword(this, newKey, isReal)
+            dialog.dismiss()
+            Toast.makeText(this, "$keyTypeName Updated Successfully.", Toast.LENGTH_SHORT).show()
+        }
+        dialog.show()
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // HELPERS FOR SETTING UP KEYS WHEN SWITCHING LOCK TYPES
+    // ---------------------------------------------------------------------------------------------
+
+    private fun showSetupPatternDialog(isReal: Boolean, onComplete: () -> Unit) {
+        val dialog = Dialog(this)
+        dialog.setContentView(R.layout.dialog_pattern_lock)
+        dialog.window?.let { window ->
+            window.setBackgroundDrawableResource(android.R.color.transparent)
+            window.setDimAmount(0.85f)
+            val dialogWidth = (resources.displayMetrics.widthPixels * 0.92).toInt().coerceAtMost((380 * resources.displayMetrics.density).toInt())
+            window.setLayout(dialogWidth, WindowManager.LayoutParams.WRAP_CONTENT)
+        }
+
+        val tvTitle = dialog.findViewById<TextView>(R.id.tvPatternTitle)
+        val tvSubtitle = dialog.findViewById<TextView>(R.id.tvPatternSubtitle)
+        val patternView = dialog.findViewById<PatternLockView>(R.id.patternLockView)
+        val btnCancel = dialog.findViewById<Button>(R.id.btnCancelPattern)
+
+        if (isReal) {
+            tvTitle.text = "Set NEW Real Pattern"
+            tvSubtitle.text = "Connect at least 4 dots"
+        } else {
+            tvTitle.text = "Set NEW Fake Pattern"
+            tvSubtitle.text = "Draw a DIFFERENT pattern for decoy mode"
+        }
+
+        btnCancel.setOnClickListener { dialog.dismiss() }
+
+        patternView.onPatternListener = { pattern ->
+            if (pattern.length < 4) {
+                Toast.makeText(this, "Connect at least 4 dots!", Toast.LENGTH_SHORT).show()
+                patternView.setErrorState(true)
+                patternView.postDelayed({ patternView.resetPattern() }, 600)
+            } else {
+                if (isReal) {
+                    tempRealKeySetup = pattern
+                    VaultSecurityManager.setPassword(this, pattern, isReal = true)
+                    dialog.dismiss()
+                    Toast.makeText(this, "Real Pattern Saved. Now set Fake Pattern.", Toast.LENGTH_SHORT).show()
+                    showSetupPatternDialog(isReal = false, onComplete = onComplete)
+                } else {
+                    if (pattern == tempRealKeySetup) {
+                        Toast.makeText(this, "Fake pattern cannot match Real pattern!", Toast.LENGTH_LONG).show()
+                        patternView.setErrorState(true)
+                        patternView.postDelayed({ patternView.resetPattern() }, 600)
+                    } else {
+                        VaultSecurityManager.setPassword(this, pattern, isReal = false)
+                        tempRealKeySetup = null
+                        dialog.dismiss()
+                        onComplete()
+                    }
+                }
+            }
+        }
+        dialog.show()
+    }
+
+    private fun showSetupTextDialog(isReal: Boolean, isPin: Boolean, onComplete: () -> Unit) {
+        val dialog = Dialog(this)
+        dialog.setContentView(R.layout.dialog_glass_password)
+        dialog.window?.let { window ->
+            window.setBackgroundDrawableResource(android.R.color.transparent)
+            window.setDimAmount(0.85f)
+            val dialogWidth = (resources.displayMetrics.widthPixels * 0.90).toInt().coerceAtMost((360 * resources.displayMetrics.density).toInt())
+            window.setLayout(dialogWidth, WindowManager.LayoutParams.WRAP_CONTENT)
+        }
+
+        val dialogTitle = dialog.findViewById<TextView>(R.id.dialogTitle)
+        val dialogInput = dialog.findViewById<EditText>(R.id.dialogInput)
+        val dialogSetButton = dialog.findViewById<Button>(R.id.dialogSetButton)
+
+        val keyTypeName = if (isPin) "PIN" else "Password"
+
+        if (isPin) {
+            dialogInput.inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+            dialogTitle.text = if (isReal) "Set REAL Numeric PIN" else "Set FAKE Numeric PIN"
+            dialogInput.hint = if (isReal) "4-Digit Real PIN" else "4-Digit Fake PIN"
+        } else {
+            dialogInput.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            dialogTitle.text = if (isReal) "Set REAL Password" else "Set FAKE Password"
+            dialogInput.hint = if (isReal) "Real Password" else "Fake Password"
+        }
+        dialogSetButton.text = "SAVE"
+
+        dialogSetButton.setOnClickListener {
+            val key = dialogInput.text.toString().trim()
+            val minLen = 4
+
+            if (key.length < minLen) {
+                Toast.makeText(this, "$keyTypeName must be at least $minLen characters!", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            if (isReal) {
+                tempRealKeySetup = key
+                VaultSecurityManager.setPassword(this, key, isReal = true)
+                dialog.dismiss()
+                Toast.makeText(this, "Real $keyTypeName Saved. Now set Fake $keyTypeName.", Toast.LENGTH_SHORT).show()
+                showSetupTextDialog(isReal = false, isPin = isPin, onComplete = onComplete)
+            } else {
+                if (key == tempRealKeySetup) {
+                    Toast.makeText(this, "Fake key cannot be identical to Real key!", Toast.LENGTH_LONG).show()
+                    return@setOnClickListener
+                }
+
+                VaultSecurityManager.setPassword(this, key, isReal = false)
+                tempRealKeySetup = null
+                dialog.dismiss()
+                onComplete()
+            }
+        }
+        dialog.show()
+    }
+}

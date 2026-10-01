@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="340dp"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/bg_glass_dialog"
+    android:padding="24dp"
+    android:gravity="center"
+    android:layout_gravity="center">
+
+    <ImageView
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:src="@drawable/ic_shield_vector"
+        android:tint="#FFA726"
+        android:layout_marginBottom="16dp"/>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="IMPORTANT WARNING"
+        android:textColor="#FFFFFF"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="12dp"/>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Remember your password! This app works offline and there is no 'Forgot Password' option. Your photos stay strictly on your phone, not on any cloud server. There is no chance of a leak. Just keep your phone safe from third-party apps.\n\nNOTE: Please write down your password on a piece of paper. After hiding a file, delete the original from your gallery manually."
+        android:textColor="#CCCCCC"
+        android:textSize="14sp"
+        android:gravity="center"
+        android:layout_marginBottom="16dp"/>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="महत्वपूर्ण चेतावनी"
+        android:textColor="#FFFFFF"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="12dp"/>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="अपना पासवर्ड याद रखें! यह ऐप ऑफलाइन काम करता है और इसमें 'पासवर्ड भूल गए' का कोई विकल्प नहीं है। आपकी तस्वीरें केवल आपके फोन में ही रहती हैं, किसी क्लाउड सर्वर पर नहीं। इसलिए लीक होने का कोई चांस नहीं है।\n\nनोट: कृपया अपना पासवर्ड किसी पेपर (कागज) पर लिखकर सुरक्षित रख लें। फोटो हाइड करने के बाद, गैलरी से मूल फोटो खुद डिलीट कर दें।"
+        android:textColor="#CCCCCC"
+        android:textSize="14sp"
+        android:gravity="center"
+        android:layout_marginBottom="24dp"/>
+
+    <Button
+        android:id="@+id/btnUnderstand"
+        android:layout_width="match_parent"
+        android:layout_height="55dp"
+        android:text="I UNDERSTAND"
+        android:textColor="#00E676"
+        android:textStyle="bold"
+        android:background="@drawable/bg_glass_input" 
+        android:backgroundTint="@android:color/transparent"
+        android:gravity="center"/>
+</LinearLayout>

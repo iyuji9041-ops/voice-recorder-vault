@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="340dp"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_glass_dialog"
+    android:orientation="vertical"
+    android:padding="24dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:layout_marginBottom="16dp">
+
+        <ImageView
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:src="@drawable/ic_shield_vector"
+            android:tint="#00E676" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:text="Welcome to Voice Recorder"
+            android:textColor="#FFFFFF"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="220dp"
+        android:layout_marginBottom="20dp">
+
+        <TextView
+            android:id="@+id/tvTutorialContent"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#DDFFFFFF"
+            android:textSize="14sp"
+            android:lineSpacingExtra="5dp"
+            android:text="SECRET VAULT ENTRANCE:\nThis app works as a genuine Voice Recorder.\n\nTo access your secret vault:\nPress and hold the red RECORD button for 5 seconds.\n\nTRIPLE PROTECTION:\n1. Door Passcode: Entered when holding the record button.\n2. Swipe Gate: Smooth slider unlock animation.\n3. Vault Master Key: 4-digit PIN, 3x3 Pattern, or Text Password.\n\nDATA SECURITY:\nHidden photos and media are stored with AES-256 encryption in persistent storage and remain safe even if app data is cleared." />
+    </ScrollView>
+
+    <Button
+        android:id="@+id/btnTutorialGotIt"
+        android:layout_width="match_parent"
+        android:layout_height="50dp"
+        android:background="@drawable/bg_glass_button_green"
+        android:text="GOT IT, START USING APP"
+        android:textColor="#000000"
+        android:textSize="14sp"
+        android:textStyle="bold" />
+
+</LinearLayout>

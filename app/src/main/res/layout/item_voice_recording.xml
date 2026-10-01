@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/recordingCardRoot"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginBottom="10dp"
+    android:background="@drawable/bg_glass_note_card"
+    android:padding="12dp">
+
+    <!-- Multi-select Checkmark (visible only in selection mode) -->
+    <ImageView
+        android:id="@+id/ivSelectCheck"
+        android:layout_width="28dp"
+        android:layout_height="28dp"
+        android:layout_alignParentStart="true"
+        android:layout_centerVertical="true"
+        android:layout_marginEnd="10dp"
+        android:src="@drawable/ic_check_vector"
+        android:tint="#00E676"
+        android:visibility="gone" />
+
+    <!-- Play/Pause Button -->
+    <ImageView
+        android:id="@+id/btnPlayAudio"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:layout_toEndOf="@+id/ivSelectCheck"
+        android:layout_centerVertical="true"
+        android:src="@drawable/ic_play_vector"
+        android:tint="#00E676"
+        android:background="@drawable/bg_glass_input"
+        android:padding="10dp"
+        android:clickable="true"
+        android:focusable="true" />
+
+    <!-- Details -->
+    <LinearLayout
+        android:id="@+id/detailsLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_toEndOf="@+id/btnPlayAudio"
+        android:layout_toStartOf="@+id/actionsLayout"
+        android:layout_centerVertical="true"
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="8dp"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/tvAudioTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Recording_01.m4a"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="3dp"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/tvAudioDuration"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="00:00"
+                android:textColor="#00E676"
+                android:textSize="12sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text=" • "
+                android:textColor="#66FFFFFF"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/tvAudioDate"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Today"
+                android:textColor="#88FFFFFF"
+                android:textSize="12sp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Action Buttons (Share & Delete) -->
+    <LinearLayout
+        android:id="@+id/actionsLayout"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentEnd="true"
+        android:layout_centerVertical="true"
+        android:orientation="horizontal">
+
+        <ImageView
+            android:id="@+id/btnShareAudio"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginEnd="6dp"
+            android:src="@drawable/ic_share_vector"
+            android:tint="#00E676"
+            android:background="@drawable/bg_glass_input"
+            android:padding="8dp"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <ImageView
+            android:id="@+id/btnDeleteRecording"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:src="@drawable/ic_delete_vector"
+            android:tint="#FF5252"
+            android:background="@drawable/bg_glass_input"
+            android:padding="8dp"
+            android:clickable="true"
+            android:focusable="true" />
+    </LinearLayout>
+
+</RelativeLayout>

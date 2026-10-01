@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="125dp"
+    android:layout_margin="4dp"
+    android:background="@drawable/bg_gallery_item">
+
+    <!-- Image Thumbnail -->
+    <ImageView
+        android:id="@+id/savedImage"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop" />
+
+    <!-- Video Play Badge Overlay (visible for videos) -->
+    <ImageView
+        android:id="@+id/ivVideoBadge"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:layout_centerInParent="true"
+        android:src="@drawable/ic_play_vector"
+        android:tint="#FFFFFF"
+        android:background="@drawable/bg_glass_input"
+        android:padding="6dp"
+        android:visibility="gone" />
+
+    <!-- Audio Badge Overlay (visible for audio) -->
+    <ImageView
+        android:id="@+id/ivAudioBadge"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_centerInParent="true"
+        android:src="@drawable/ic_audio_vector"
+        android:tint="#00E676"
+        android:background="@drawable/bg_glass_input"
+        android:padding="8dp"
+        android:visibility="gone" />
+
+    <!-- Restore to Downloads Button with clean vector drawable -->
+    <ImageView
+        android:id="@+id/btnRestore"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:layout_alignParentEnd="true"
+        android:layout_alignParentTop="true"
+        android:layout_margin="6dp"
+        android:src="@drawable/ic_download_vector"
+        android:tint="#FFFFFF"
+        android:background="@drawable/bg_glass_input"
+        android:padding="6dp"
+        android:clickable="true"
+        android:focusable="true" />
+
+</RelativeLayout>

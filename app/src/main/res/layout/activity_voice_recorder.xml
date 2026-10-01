@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/rootVoiceRecorder"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0A0A0A">
+
+    <!-- Normal Top Bar -->
+    <RelativeLayout
+        android:id="@+id/topBar"
+        android:layout_width="match_parent"
+        android:layout_height="50dp">
+
+        <TextView
+            android:id="@+id/tvAppTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerVertical="true"
+            android:text="Voice Recorder"
+            android:textColor="#FFFFFF"
+            android:textSize="22sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tvRecordingsCount"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentEnd="true"
+            android:layout_centerVertical="true"
+            android:text="0 Recordings"
+            android:textColor="#88FFFFFF"
+            android:textSize="13sp" />
+    </RelativeLayout>
+
+    <!-- Multi-Select Action Bar (Hidden by default, shown on long-press) -->
+    <RelativeLayout
+        android:id="@+id/selectionBar"
+        android:layout_width="match_parent"
+        android:layout_height="50dp"
+        android:background="@drawable/bg_glass_input"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:visibility="gone">
+
+        <ImageView
+            android:id="@+id/btnCloseSelection"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_centerVertical="true"
+            android:src="@drawable/ic_back_vector"
+            android:tint="#FFFFFF"
+            android:padding="6dp"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <TextView
+            android:id="@+id/tvSelectedCount"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerVertical="true"
+            android:layout_toEndOf="@+id/btnCloseSelection"
+            android:layout_marginStart="12dp"
+            android:text="1 selected"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentEnd="true"
+            android:layout_centerVertical="true"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:id="@+id/btnSelectAll"
+                android:layout_width="38dp"
+                android:layout_height="38dp"
+                android:layout_marginEnd="8dp"
+                android:src="@drawable/ic_select_all_vector"
+                android:tint="#00E676"
+                android:background="@drawable/bg_glass_input"
+                android:padding="8dp"
+                android:clickable="true"
+                android:focusable="true" />
+
+            <ImageView
+                android:id="@+id/btnDeleteSelected"
+                android:layout_width="38dp"
+                android:layout_height="38dp"
+                android:src="@drawable/ic_delete_vector"
+                android:tint="#FF5252"
+                android:background="@drawable/bg_glass_input"
+                android:padding="8dp"
+                android:clickable="true"
+                android:focusable="true" />
+        </LinearLayout>
+    </RelativeLayout>
+
+    <!-- Center Waveform & Live Timer -->
+    <LinearLayout
+        android:id="@+id/centerSection"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@+id/topBar"
+        android:layout_marginTop="12dp"
+        android:background="@drawable/bg_glass_note_card"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <TextView
+            android:id="@+id/tvTimer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="00:00:00"
+            android:textColor="#FFFFFF"
+            android:textSize="36sp"
+            android:fontFamily="monospace"
+            android:textStyle="bold" />
+
+        <!-- Sound Waveform Simulation Bars -->
+        <LinearLayout
+            android:id="@+id/waveformLayout"
+            android:layout_width="match_parent"
+            android:layout_height="36dp"
+            android:layout_marginTop="12dp"
+            android:layout_marginBottom="8dp"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <View android:id="@+id/waveBar1" android:layout_width="4dp" android:layout_height="10dp" android:layout_margin="3dp" android:background="#44FFFFFF" />
+            <View android:id="@+id/waveBar2" android:layout_width="4dp" android:layout_height="18dp" android:layout_margin="3dp" android:background="#66FFFFFF" />
+            <View android:id="@+id/waveBar3" android:layout_width="4dp" android:layout_height="26dp" android:layout_margin="3dp" android:background="#88FFFFFF" />
+            <View android:id="@+id/waveBar4" android:layout_width="4dp" android:layout_height="16dp" android:layout_margin="3dp" android:background="#AAFFFFFF" />
+            <View android:id="@+id/waveBar5" android:layout_width="4dp" android:layout_height="32dp" android:layout_margin="3dp" android:background="#FF3B30" />
+            <View android:id="@+id/waveBar6" android:layout_width="4dp" android:layout_height="20dp" android:layout_margin="3dp" android:background="#AAFFFFFF" />
+            <View android:id="@+id/waveBar7" android:layout_width="4dp" android:layout_height="28dp" android:layout_margin="3dp" android:background="#88FFFFFF" />
+            <View android:id="@+id/waveBar8" android:layout_width="4dp" android:layout_height="14dp" android:layout_margin="3dp" android:background="#66FFFFFF" />
+            <View android:id="@+id/waveBar9" android:layout_width="4dp" android:layout_height="8dp" android:layout_margin="3dp" android:background="#44FFFFFF" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/tvRecordStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Tap red button to record"
+            android:textColor="#AAAAAA"
+            android:textSize="13sp" />
+    </LinearLayout>
+
+    <!-- Bottom Controls: Big Record Button -->
+    <RelativeLayout
+        android:id="@+id/bottomControlSection"
+        android:layout_width="match_parent"
+        android:layout_height="105dp"
+        android:layout_alignParentBottom="true"
+        android:gravity="center">
+
+        <!-- Outer Ring -->
+        <RelativeLayout
+            android:id="@+id/btnRecordOuter"
+            android:layout_width="84dp"
+            android:layout_height="84dp"
+            android:layout_centerInParent="true"
+            android:background="@drawable/bg_record_btn_outer"
+            android:gravity="center">
+
+            <!-- Inner Button -->
+            <RelativeLayout
+                android:id="@+id/btnRecord"
+                android:layout_width="66dp"
+                android:layout_height="66dp"
+                android:background="@drawable/bg_record_btn_inner"
+                android:gravity="center"
+                android:clickable="true"
+                android:focusable="true">
+
+                <ImageView
+                    android:id="@+id/ivRecordIcon"
+                    android:layout_width="30dp"
+                    android:layout_height="30dp"
+                    android:src="@drawable/ic_mic_vector"
+                    android:tint="#FFFFFF" />
+            </RelativeLayout>
+        </RelativeLayout>
+    </RelativeLayout>
+
+    <!-- Recordings List -->
+    <TextView
+        android:id="@+id/tvRecentHeader"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@+id/centerSection"
+        android:layout_marginTop="14dp"
+        android:layout_marginBottom="8dp"
+        android:text="All Recordings"
+        android:textColor="#88FFFFFF"
+        android:textSize="14sp"
+        android:textStyle="bold" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rvRecordingsList"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_below="@+id/tvRecentHeader"
+        android:layout_above="@+id/bottomControlSection"
+        android:clipToPadding="false"
+        android:paddingBottom="6dp" />
+
+</RelativeLayout>

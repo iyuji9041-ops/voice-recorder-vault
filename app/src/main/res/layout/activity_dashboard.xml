@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/rootDashboard"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0A0A0A">
+
+    <TextView
+        android:id="@+id/headerText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="My Secure Vault"
+        android:textColor="#FFFFFF"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:layout_alignParentTop="true"
+        android:layout_marginStart="8dp" />
+
+    <LinearLayout
+        android:id="@+id/centerContentLayout"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:layout_centerInParent="true">
+
+        <ImageView
+            android:id="@+id/secureLockImage"
+            android:layout_width="140dp"
+            android:layout_height="140dp"
+            android:src="@drawable/premium_lock" 
+            android:layout_gravity="center_horizontal"
+            android:layout_marginBottom="20dp"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Secure Vault"
+            android:textColor="#FFFFFF"
+            android:textSize="30sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="6dp"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Your offline private space"
+            android:textColor="#888888"
+            android:textSize="15sp"
+            android:layout_marginBottom="40dp"/>
+    </LinearLayout>
+
+    <RelativeLayout
+        android:id="@+id/swipeTrack"
+        android:layout_width="300dp"
+        android:layout_height="64dp"
+        android:layout_below="@+id/centerContentLayout"
+        android:layout_centerHorizontal="true"
+        android:background="@drawable/bg_glass_track">
+
+        <TextView
+            android:id="@+id/swipeText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerInParent="true"
+            android:text="Swipe to Unlock"
+            android:textColor="#FFFFFF"
+            android:textSize="17sp"
+            android:textStyle="bold" />
+
+        <RelativeLayout
+            android:id="@+id/swipeThumb"
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:layout_alignParentStart="true"
+            android:layout_centerVertical="true"
+            android:background="@drawable/bg_glass_thumb">
+
+            <ImageView
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_centerInParent="true"
+                android:src="@drawable/ic_play_vector"
+                android:tint="#FFFFFF" />
+        </RelativeLayout>
+    </RelativeLayout>
+</RelativeLayout>
