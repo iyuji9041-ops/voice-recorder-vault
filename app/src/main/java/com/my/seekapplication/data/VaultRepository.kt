@@ -194,6 +194,28 @@ class VaultRepository(
     }
 
     /**
+     * Updates an existing vault item with new content (e.g. after photo rotation/editing) atomically.
+     */
+    fun updateItemContent(item: VaultItem, source: InputStream): VaultItem = synchronized(lock) {
+        val targetFile = getFileForItem(item)
+        val tempFile = File(vaultDir, ".tmp_${item.id}.enc")
+        try {
+            cipherStream.encryptStreamToFile(source, tempFile, masterKey)
+            if (!tempFile.renameTo(targetFile)) {
+                tempFile.copyTo(targetFile, overwrite = true)
+                tempFile.delete()
+            }
+            val updated = item.copy(fileSizeBytes = targetFile.length())
+            itemsMap[item.id] = updated
+            persistIndex()
+            return updated
+        } catch (e: Exception) {
+            tempFile.delete()
+            throw e
+        }
+    }
+
+    /**
      * Deletes an item from the vault and removes its encrypted file.
      */
     fun deleteItem(id: String): Boolean = synchronized(lock) {

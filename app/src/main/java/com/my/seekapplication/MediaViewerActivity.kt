@@ -129,24 +129,24 @@ class MediaViewerActivity : AppCompatActivity() {
         btnRestoreViewer.setOnClickListener { restoreCurrentMedia() }
 
         // Setup photo editing buttons
-        findViewById<LinearLayout>(R.id.btnRotatePhoto).setOnClickListener {
+        findViewById<View>(R.id.btnRotate)?.setOnClickListener {
             val holder = getCurrentViewHolder()
-            holder?.imageView?.rotate90()
+            holder?.imageView?.rotate90Clockwise()
         }
 
-        findViewById<LinearLayout>(R.id.btnBrightnessPlus).setOnClickListener {
+        findViewById<View>(R.id.btnFlip)?.setOnClickListener {
             val holder = getCurrentViewHolder()
-            holder?.imageView?.adjustBrightness(0.1f)
+            holder?.imageView?.toggleFlipHorizontal()
         }
 
-        findViewById<LinearLayout>(R.id.btnBrightnessMinus).setOnClickListener {
+        findViewById<View>(R.id.btnFilter)?.setOnClickListener {
             val holder = getCurrentViewHolder()
-            holder?.imageView?.adjustBrightness(-0.1f)
+            val filterName = holder?.imageView?.cycleFilterMode() ?: "Normal"
+            Toast.makeText(this, "Filter: $filterName", Toast.LENGTH_SHORT).show()
         }
 
-        findViewById<LinearLayout>(R.id.btnContrast).setOnClickListener {
-            val holder = getCurrentViewHolder()
-            holder?.imageView?.adjustContrast(1.2f)
+        findViewById<View>(R.id.btnSaveEdit)?.setOnClickListener {
+            saveEditedPhoto()
         }
     }
 
@@ -154,6 +154,54 @@ class MediaViewerActivity : AppCompatActivity() {
         val currentPos = viewPager.currentItem
         val recyclerView = viewPager.getChildAt(0) as? RecyclerView ?: return null
         return recyclerView.findViewHolderForAdapterPosition(currentPos) as? MediaPagerAdapter.MediaViewHolder
+    }
+
+    private fun saveEditedPhoto() {
+        val holder = getCurrentViewHolder() ?: return
+        val editedBitmap = holder.imageView.createEditedBitmap() ?: run {
+            Toast.makeText(this, "No changes to save.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val currentPos = viewPager.currentItem
+        if (currentPos !in filePaths.indices) return
+
+        val repo = VaultSession.getRepositoryOrNull() ?: run {
+            Toast.makeText(this, "Vault session locked.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val filePath = filePaths[currentPos]
+        val file = File(filePath)
+        val itemId = itemIds?.getOrNull(currentPos) ?: file.name.removeSuffix(".enc")
+        val item = repo.getItemById(itemId) ?: run {
+            Toast.makeText(this, "Item not found in vault.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        Toast.makeText(this, "Saving edited photo...", Toast.LENGTH_SHORT).show()
+
+        viewerScope.launch {
+            val success = withContext(Dispatchers.IO) {
+                try {
+                    val baos = java.io.ByteArrayOutputStream()
+                    editedBitmap.compress(Bitmap.CompressFormat.JPEG, 95, baos)
+                    java.io.ByteArrayInputStream(baos.toByteArray()).use { bais ->
+                        repo.updateItemContent(item, bais)
+                    }
+                    true
+                } catch (e: Exception) {
+                    Log.e(tag, "Failed saving edited photo: ${e.message}", e)
+                    false
+                }
+            }
+
+            if (success) {
+                Toast.makeText(this@MediaViewerActivity, "Photo saved to vault!", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this@MediaViewerActivity, "Failed to save photo.", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
     private fun updateCounter(position: Int) {
