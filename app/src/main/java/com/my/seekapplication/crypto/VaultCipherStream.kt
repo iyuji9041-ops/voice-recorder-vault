@@ -84,19 +84,19 @@ class VaultCipherStream(
         val buf = ByteBuffer.wrap(headerBytes).order(ByteOrder.BIG_ENDIAN)
         val magic = buf.int
         if (magic != MAGIC_BYTES) {
-            throw IOException("Invalid magic header: expected 0x${Integer.toHexString(MAGIC_BYTES)} but got 0x${Integer.toHexString(magic)}")
+            throw SecurityException("Invalid magic header: expected 0x${Integer.toHexString(MAGIC_BYTES)} but got 0x${Integer.toHexString(magic)}")
         }
         val ver = buf.get()
         if (ver != VERSION) {
-            throw IOException("Unsupported vault file format version: $ver")
+            throw SecurityException("Unsupported vault file format version: $ver")
         }
         val chunkSize = buf.int
         if (chunkSize <= 0 || chunkSize > 4 * 1024 * 1024) {
-            throw IOException("Invalid chunk size in header: $chunkSize")
+            throw SecurityException("Invalid chunk size in header: $chunkSize")
         }
         val plaintextSize = buf.long
         if (plaintextSize < 0) {
-            throw IOException("Invalid negative plaintext size in header: $plaintextSize")
+            throw SecurityException("Invalid negative plaintext size in header: $plaintextSize")
         }
         val baseNonce = ByteArray(BASE_NONCE_LENGTH)
         buf.get(baseNonce)

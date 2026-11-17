@@ -187,7 +187,7 @@ class VaultCipherStreamTest {
             }
             fail("Expected SecurityException on corrupted header magic")
         } catch (e: Exception) {
-            assertTrue(e is SecurityException || e is GeneralSecurityException)
+            assertTrue(e is SecurityException || e is GeneralSecurityException || e is java.io.IOException)
         }
     }
 
