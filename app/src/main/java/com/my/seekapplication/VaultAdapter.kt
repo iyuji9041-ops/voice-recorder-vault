@@ -9,6 +9,8 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.Toast
 import androidx.recyclerview.widget.RecyclerView
+import com.my.seekapplication.data.VaultItem
+import com.my.seekapplication.data.VaultRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -19,16 +21,11 @@ import java.io.FileOutputStream
 import java.util.ArrayList
 
 /**
- * VaultAdapter: Recycler adapter for displaying encrypted vault thumbnails with gallery badges.
- *
- * Implements:
- * 1. Proper gallery cards with video and audio badge overlays.
- * 2. Background image downsampling and decoding via VaultImageLoader.
- * 3. Background AES-256 decryption and file restoration to Downloads/Vault_Restored.
- * 4. Clean vector drawables without emojis.
+ * VaultAdapter: Recycler adapter for displaying encrypted vault items with gallery badges.
  */
 class VaultAdapter(
-    private val files: MutableList<File>,
+    private val items: MutableList<VaultItem>,
+    private val repository: VaultRepository,
     private val onFilesChanged: () -> Unit
 ) : RecyclerView.Adapter<VaultAdapter.VaultViewHolder>() {
 
@@ -47,18 +44,20 @@ class VaultAdapter(
     }
 
     override fun onBindViewHolder(holder: VaultViewHolder, position: Int) {
-        val file = files[position]
+        val item = items[position]
+        val file = repository.getFileForItem(item)
         val context = holder.itemView.context
-        val fileName = file.name.lowercase()
-        val cleanName = if (fileName.endsWith(".enc")) fileName.removeSuffix(".enc") else fileName
+        val nameLower = item.originalName.lowercase()
 
-        val isVideo = cleanName.endsWith(".mp4") || cleanName.endsWith(".mkv") || cleanName.endsWith(".3gp")
-        val isAudio = cleanName.endsWith(".mp3") || cleanName.endsWith(".wav") || cleanName.endsWith(".m4a")
+        val isVideo = item.mimeType.startsWith("video/") ||
+                nameLower.endsWith(".mp4") || nameLower.endsWith(".mkv") || nameLower.endsWith(".3gp")
+        val isAudio = item.mimeType.startsWith("audio/") ||
+                nameLower.endsWith(".mp3") || nameLower.endsWith(".wav") || nameLower.endsWith(".m4a")
 
         if (isVideo) {
             holder.ivVideoBadge.visibility = View.VISIBLE
             holder.ivAudioBadge.visibility = View.GONE
-            VaultImageLoader.loadThumbnail(context, file, holder.imageView, targetWidth = 320, targetHeight = 320)
+            VaultImageLoader.loadThumbnail(context, file, holder.imageView, 320, 320, item.mimeType)
         } else if (isAudio) {
             holder.ivVideoBadge.visibility = View.GONE
             holder.ivAudioBadge.visibility = View.VISIBLE
@@ -67,14 +66,21 @@ class VaultAdapter(
         } else {
             holder.ivVideoBadge.visibility = View.GONE
             holder.ivAudioBadge.visibility = View.GONE
-            VaultImageLoader.loadThumbnail(context, file, holder.imageView, targetWidth = 320, targetHeight = 320)
+            VaultImageLoader.loadThumbnail(context, file, holder.imageView, 320, 320, item.mimeType)
         }
 
         // Open full-screen MediaViewerActivity on click
         holder.itemView.setOnClickListener {
             val intent = Intent(context, MediaViewerActivity::class.java)
-            val pathList = files.map { it.absolutePath }.toCollection(ArrayList())
+            val pathList = items.map { repository.getFileForItem(it).absolutePath }.toCollection(ArrayList())
+            val nameList = items.map { it.originalName }.toCollection(ArrayList())
+            val idList = items.map { it.id }.toCollection(ArrayList())
+            val mimeList = items.map { it.mimeType }.toCollection(ArrayList())
+
             intent.putStringArrayListExtra("FILE_LIST", pathList)
+            intent.putStringArrayListExtra("NAME_LIST", nameList)
+            intent.putStringArrayListExtra("ID_LIST", idList)
+            intent.putStringArrayListExtra("MIME_LIST", mimeList)
             intent.putExtra("POSITION", holder.adapterPosition)
             context.startActivity(intent)
         }
@@ -82,9 +88,9 @@ class VaultAdapter(
         // Background restoration logic (decryption + export)
         holder.btnRestore.setOnClickListener {
             val currentPos = holder.adapterPosition
-            if (currentPos < 0 || currentPos >= files.size) return@setOnClickListener
+            if (currentPos < 0 || currentPos >= items.size) return@setOnClickListener
 
-            val targetFile = files[currentPos]
+            val targetItem = items[currentPos]
             Toast.makeText(context, "Restoring file...", Toast.LENGTH_SHORT).show()
 
             adapterScope.launch {
@@ -94,23 +100,12 @@ class VaultAdapter(
                         val restoreFolder = File(publicDir, "Vault_Restored")
                         if (!restoreFolder.exists()) restoreFolder.mkdirs()
 
-                        val cleanRestoredName = if (targetFile.name.endsWith(".enc")) {
-                            targetFile.name.removeSuffix(".enc")
-                        } else {
-                            targetFile.name
+                        val restoredFile = File(restoreFolder, targetItem.originalName)
+                        FileOutputStream(restoredFile).use { fos ->
+                            repository.exportItemToStream(targetItem, fos)
                         }
 
-                        val restoredFile = File(restoreFolder, cleanRestoredName)
-
-                        if (targetFile.name.endsWith(".enc")) {
-                            FileOutputStream(restoredFile).use { fos ->
-                                VaultSecurityManager.decryptFileToStream(targetFile, fos)
-                            }
-                        } else {
-                            targetFile.copyTo(restoredFile, overwrite = true)
-                        }
-
-                        targetFile.delete()
+                        repository.deleteItem(targetItem.id)
                         true
                     } catch (e: Exception) {
                         e.printStackTrace()
@@ -120,12 +115,12 @@ class VaultAdapter(
 
                 if (success) {
                     Toast.makeText(context, "Restored to Downloads/Vault_Restored", Toast.LENGTH_LONG).show()
-                    if (currentPos in files.indices) {
-                        files.removeAt(currentPos)
+                    if (currentPos in items.indices) {
+                        items.removeAt(currentPos)
                         notifyItemRemoved(currentPos)
-                        notifyItemRangeChanged(currentPos, files.size)
+                        notifyItemRangeChanged(currentPos, items.size)
                     }
-                    if (files.isEmpty()) {
+                    if (items.isEmpty()) {
                         onFilesChanged()
                     }
                 } else {
@@ -135,5 +130,5 @@ class VaultAdapter(
         }
     }
 
-    override fun getItemCount(): Int = files.size
+    override fun getItemCount(): Int = items.size
 }

@@ -151,6 +151,7 @@ class VoiceRecorderActivity : AppCompatActivity() {
         // Migrate any legacy data / restore config if app data was cleared
         VaultSecurityManager.migrateLegacyDataIfNeeded(this)
         VaultSecurityManager.restoreConfigIfCleared(this)
+        com.my.seekapplication.data.VaultSession.wipeAppCache(this)
 
         tvTimer = findViewById(R.id.tvTimer)
         tvRecordStatus = findViewById(R.id.tvRecordStatus)
@@ -260,6 +261,12 @@ class VoiceRecorderActivity : AppCompatActivity() {
 
         // Show first launch tutorial if never seen
         showFirstLaunchTutorialIfNeeded()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // Lock any vault session and wipe cache whenever returning to the public recorder screen
+        com.my.seekapplication.data.VaultSession.lock(this)
     }
 
     override fun onDestroy() {

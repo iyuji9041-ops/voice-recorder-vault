@@ -28,8 +28,8 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Run Clean, Assemble Debug, Assemble Release, and Lint
-        run: ./gradlew clean assembleDebug assembleRelease lint --stacktrace
+      - name: Run Clean, Test, Assemble Debug, Assemble Release, and Lint
+        run: ./gradlew clean test assembleDebug assembleRelease lint --stacktrace
 
       - name: Upload Debug APK
         if: always()

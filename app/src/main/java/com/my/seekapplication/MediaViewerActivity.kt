@@ -1,5 +1,6 @@
 package com.my.seekapplication
 
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.net.Uri
@@ -18,32 +19,38 @@ import android.widget.RelativeLayout
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
-import android.widget.VideoView
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import androidx.media3.ui.PlayerView
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
+import com.my.seekapplication.crypto.VaultCipherStream
+import com.my.seekapplication.data.VaultSession
+import com.my.seekapplication.player.EncryptedVaultDataSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.util.ArrayList
 import java.util.Locale
 
 /**
- * MediaViewerActivity: Full-screen swipeable viewer for encrypted images and video playback.
- * Features:
- * 1. Pinch-to-zoom, panning, and double-tap zoom via ZoomableImageView.
- * 2. In-app photo editing: Rotate 90°, Flip horizontally, Filters, and direct Save to encrypted vault.
- * 3. Custom video player with Play/Pause, 10s rewind/forward, and seekbar.
- * 4. Android 16 Edge-to-Edge window insets compliance without UI overlap.
+ * MediaViewerActivity: Fullscreen in-memory media viewer with Media3 ExoPlayer.
+ *
+ * Guarantees:
+ * 1. ZERO plaintext files on disk for video, audio, and photo viewing.
+ * 2. In-memory AES-256-GCM chunk streaming with seek support via EncryptedVaultDataSource.
+ * 3. Android 16 Edge-to-Edge with notch / cutout protection.
  */
 class MediaViewerActivity : AppCompatActivity() {
 
@@ -51,14 +58,16 @@ class MediaViewerActivity : AppCompatActivity() {
 
     private lateinit var viewPager: ViewPager2
     private lateinit var tvMediaCounter: TextView
-    private lateinit var layoutPhotoEditing: LinearLayout
     private lateinit var viewerTopBar: RelativeLayout
+    private lateinit var layoutPhotoEditing: LinearLayout
 
-    private var filePaths = ArrayList<String>()
+    private lateinit var filePaths: ArrayList<String>
+    private var fileNames: ArrayList<String>? = null
+    private var itemIds: ArrayList<String>? = null
+    private var mimeTypes: ArrayList<String>? = null
+
     private lateinit var adapter: MediaPagerAdapter
     private val viewerScope = CoroutineScope(Dispatchers.Main + Job())
-
-    private val tempPlaybackFiles = mutableListOf<File>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -85,13 +94,16 @@ class MediaViewerActivity : AppCompatActivity() {
             rootMediaViewer.setPadding(systemBars.left, 0, systemBars.right, 0)
             viewerTopBar.layoutParams.height = (56 * density).toInt() + systemBars.top
             viewerTopBar.setPadding(viewerTopBar.paddingLeft, systemBars.top, viewerTopBar.paddingRight, 0)
-            
+
             layoutPhotoEditing.layoutParams.height = (64 * density).toInt() + systemBars.bottom
             layoutPhotoEditing.setPadding(layoutPhotoEditing.paddingLeft, 0, layoutPhotoEditing.paddingRight, systemBars.bottom)
             insets
         }
 
         filePaths = intent.getStringArrayListExtra("FILE_LIST") ?: ArrayList()
+        fileNames = intent.getStringArrayListExtra("NAME_LIST")
+        itemIds = intent.getStringArrayListExtra("ID_LIST")
+        mimeTypes = intent.getStringArrayListExtra("MIME_LIST")
         val startPosition = intent.getIntExtra("POSITION", 0)
 
         if (filePaths.isEmpty()) {
@@ -114,34 +126,34 @@ class MediaViewerActivity : AppCompatActivity() {
         })
 
         btnBack.setOnClickListener { finish() }
+        btnRestoreViewer.setOnClickListener { restoreCurrentMedia() }
 
-        // Export/Restore to public storage
-        btnRestoreViewer.setOnClickListener {
-            restoreCurrentFile()
+        // Setup photo editing buttons
+        findViewById<LinearLayout>(R.id.btnRotatePhoto).setOnClickListener {
+            val holder = getCurrentViewHolder()
+            holder?.imageView?.rotate90()
         }
 
-        // Photo editing buttons
-        findViewById<View>(R.id.btnRotate).setOnClickListener {
-            getCurrentZoomableImageView()?.rotate90Clockwise()
+        findViewById<LinearLayout>(R.id.btnBrightnessPlus).setOnClickListener {
+            val holder = getCurrentViewHolder()
+            holder?.imageView?.adjustBrightness(0.1f)
         }
 
-        findViewById<View>(R.id.btnFlip).setOnClickListener {
-            getCurrentZoomableImageView()?.toggleFlipHorizontal()
+        findViewById<LinearLayout>(R.id.btnBrightnessMinus).setOnClickListener {
+            val holder = getCurrentViewHolder()
+            holder?.imageView?.adjustBrightness(-0.1f)
         }
 
-        findViewById<View>(R.id.btnFilter).setOnClickListener {
-            val filterName = getCurrentZoomableImageView()?.cycleFilterMode() ?: "Normal"
-            Toast.makeText(this, filterName, Toast.LENGTH_SHORT).show()
-        }
-
-        findViewById<View>(R.id.btnSaveEdit).setOnClickListener {
-            saveEditedPhoto()
+        findViewById<LinearLayout>(R.id.btnContrast).setOnClickListener {
+            val holder = getCurrentViewHolder()
+            holder?.imageView?.adjustContrast(1.2f)
         }
     }
 
-    private fun getCurrentZoomableImageView(): ZoomableImageView? {
-        val currentView = (viewPager.getChildAt(0) as? RecyclerView)?.findViewHolderForAdapterPosition(viewPager.currentItem)?.itemView
-        return currentView?.findViewById(R.id.viewerImage)
+    private fun getCurrentViewHolder(): MediaPagerAdapter.MediaViewHolder? {
+        val currentPos = viewPager.currentItem
+        val recyclerView = viewPager.getChildAt(0) as? RecyclerView ?: return null
+        return recyclerView.findViewHolderForAdapterPosition(currentPos) as? MediaPagerAdapter.MediaViewHolder
     }
 
     private fun updateCounter(position: Int) {
@@ -149,64 +161,29 @@ class MediaViewerActivity : AppCompatActivity() {
     }
 
     private fun updateToolbarVisibility(position: Int) {
-        if (position in filePaths.indices) {
-            val file = File(filePaths[position])
-            val cleanName = if (file.name.endsWith(".enc")) file.name.removeSuffix(".enc") else file.name
-            val isVideo = cleanName.endsWith(".mp4", true) || cleanName.endsWith(".mkv", true) || cleanName.endsWith(".3gp", true)
-            val isAudio = cleanName.endsWith(".mp3", true) || cleanName.endsWith(".wav", true) || cleanName.endsWith(".m4a", true)
+        if (position !in filePaths.indices) return
+        val path = filePaths[position]
+        val name = fileNames?.getOrNull(position) ?: File(path).name
+        val isVideoOrAudio = isVideoOrAudio(name)
 
-            layoutPhotoEditing.visibility = if (isVideo || isAudio) View.GONE else View.VISIBLE
-        }
+        layoutPhotoEditing.visibility = if (isVideoOrAudio) View.GONE else View.VISIBLE
     }
 
-    private fun saveEditedPhoto() {
-        val zoomable = getCurrentZoomableImageView() ?: return
-        val editedBitmap = zoomable.createEditedBitmap() ?: run {
-            Toast.makeText(this, "No changes to save.", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        val currentPos = viewPager.currentItem
-        if (currentPos !in filePaths.indices) return
-
-        val targetFile = File(filePaths[currentPos])
-        Toast.makeText(this, "Saving edited photo...", Toast.LENGTH_SHORT).show()
-
-        viewerScope.launch {
-            val success = withContext(Dispatchers.IO) {
-                try {
-                    val baos = ByteArrayOutputStream()
-                    editedBitmap.compress(Bitmap.CompressFormat.JPEG, 95, baos)
-                    val bytes = baos.toByteArray()
-
-                    if (targetFile.name.endsWith(".enc")) {
-                        ByteArrayInputStream(bytes).use { bais ->
-                            VaultSecurityManager.encryptStreamToFile(bais, targetFile)
-                        }
-                    } else {
-                        targetFile.writeBytes(bytes)
-                    }
-                    true
-                } catch (e: Exception) {
-                    Log.e(tag, "Failed saving edited photo: ${e.message}", e)
-                    false
-                }
-            }
-
-            if (success) {
-                Toast.makeText(this@MediaViewerActivity, "Photo saved to vault!", Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(this@MediaViewerActivity, "Failed to save photo.", Toast.LENGTH_SHORT).show()
-            }
-        }
+    private fun isVideoOrAudio(name: String): Boolean {
+        val lower = name.lowercase().removeSuffix(".enc")
+        return lower.endsWith(".mp4") || lower.endsWith(".mkv") || lower.endsWith(".3gp") ||
+                lower.endsWith(".mp3") || lower.endsWith(".wav") || lower.endsWith(".m4a")
     }
 
-    private fun restoreCurrentFile() {
+    private fun restoreCurrentMedia() {
         val currentPos = viewPager.currentItem
         if (currentPos !in filePaths.indices) return
 
         val path = filePaths[currentPos]
         val file = File(path)
+        val repo = VaultSession.getRepositoryOrNull()
+        val originalName = fileNames?.getOrNull(currentPos) ?: file.name.removeSuffix(".enc")
+        val itemId = itemIds?.getOrNull(currentPos)
 
         Toast.makeText(this, "Restoring file...", Toast.LENGTH_SHORT).show()
 
@@ -217,18 +194,27 @@ class MediaViewerActivity : AppCompatActivity() {
                     val restoreFolder = File(publicDir, "Vault_Restored")
                     if (!restoreFolder.exists()) restoreFolder.mkdirs()
 
-                    val cleanName = if (file.name.endsWith(".enc")) file.name.removeSuffix(".enc") else file.name
-                    val restoredFile = File(restoreFolder, cleanName)
-
-                    if (file.name.endsWith(".enc")) {
-                        FileOutputStream(restoredFile).use { fos ->
-                            VaultSecurityManager.decryptFileToStream(file, fos)
+                    val restoredFile = File(restoreFolder, originalName)
+                    FileOutputStream(restoredFile).use { fos ->
+                        if (repo != null && file.name.endsWith(".enc")) {
+                            val item = itemId?.let { repo.getItemById(it) }
+                            if (item != null) {
+                                repo.exportItemToStream(item, fos)
+                            } else {
+                                VaultCipherStream().getDecryptedStream(file, repo.masterKey).use { input ->
+                                    input.copyTo(fos)
+                                }
+                            }
+                        } else {
+                            file.copyTo(restoredFile, overwrite = true)
                         }
-                    } else {
-                        file.copyTo(restoredFile, overwrite = true)
                     }
 
-                    file.delete()
+                    if (repo != null && itemId != null) {
+                        repo.deleteItem(itemId)
+                    } else {
+                        file.delete()
+                    }
                     true
                 } catch (e: Exception) {
                     Log.e(tag, "Failed to restore: ${e.message}", e)
@@ -237,9 +223,12 @@ class MediaViewerActivity : AppCompatActivity() {
             }
 
             if (success) {
-                Toast.makeText(this@MediaViewerActivity, "Restored Successfully!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@MediaViewerActivity, "Restored Successfully to Downloads/Vault_Restored!", Toast.LENGTH_SHORT).show()
                 if (currentPos in filePaths.indices) {
                     filePaths.removeAt(currentPos)
+                    fileNames?.removeAt(currentPos)
+                    itemIds?.removeAt(currentPos)
+                    mimeTypes?.removeAt(currentPos)
                     adapter.notifyItemRemoved(currentPos)
                     adapter.notifyItemRangeChanged(currentPos, filePaths.size)
                 }
@@ -259,17 +248,14 @@ class MediaViewerActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        for (f in tempPlaybackFiles) {
-            try { f.delete() } catch (ignored: Exception) {}
-        }
-        tempPlaybackFiles.clear()
+        VaultSession.wipeAppCache(this)
     }
 
     inner class MediaPagerAdapter(private val paths: List<String>) : RecyclerView.Adapter<MediaPagerAdapter.MediaViewHolder>() {
 
         inner class MediaViewHolder(view: View) : RecyclerView.ViewHolder(view) {
             val imageView: ZoomableImageView = view.findViewById(R.id.viewerImage)
-            val videoView: VideoView = view.findViewById(R.id.viewerVideo)
+            val playerView: PlayerView = view.findViewById(R.id.viewerPlayerView)
             val videoTouchOverlay: View = view.findViewById(R.id.videoTouchOverlay)
             val videoControlsLayout: RelativeLayout = view.findViewById(R.id.videoControlsLayout)
             val btnPlayPause: ImageView = view.findViewById(R.id.btnVideoPlayPause)
@@ -279,22 +265,31 @@ class MediaViewerActivity : AppCompatActivity() {
             val tvCurrentTime: TextView = view.findViewById(R.id.tvVideoCurrentTime)
             val tvTotalTime: TextView = view.findViewById(R.id.tvVideoTotalTime)
 
+            var exoPlayer: ExoPlayer? = null
             var currentJob: Job? = null
-            var tempVideoFile: File? = null
             val handler = Handler(Looper.getMainLooper())
 
             val progressUpdateRunnable: Runnable = object : Runnable {
                 override fun run() {
-                    if (videoView.isPlaying) {
-                        val current = videoView.currentPosition
-                        val total = videoView.duration
-                        videoSeekBar.max = total
-                        videoSeekBar.progress = current
-                        tvCurrentTime.text = formatTime(current)
-                        tvTotalTime.text = formatTime(total)
+                    exoPlayer?.let { player ->
+                        if (player.isPlaying) {
+                            val current = player.currentPosition.toInt()
+                            val total = player.duration.coerceAtLeast(0).toInt()
+                            videoSeekBar.max = total
+                            videoSeekBar.progress = current
+                            tvCurrentTime.text = formatTime(current)
+                            tvTotalTime.text = formatTime(total)
+                        }
                     }
                     handler.postDelayed(this, 500)
                 }
+            }
+
+            fun releasePlayer() {
+                handler.removeCallbacks(progressUpdateRunnable)
+                exoPlayer?.release()
+                exoPlayer = null
+                playerView.player = null
             }
         }
 
@@ -305,113 +300,116 @@ class MediaViewerActivity : AppCompatActivity() {
 
         override fun onBindViewHolder(holder: MediaViewHolder, position: Int) {
             holder.currentJob?.cancel()
-            holder.handler.removeCallbacks(holder.progressUpdateRunnable)
+            holder.releasePlayer()
 
             val path = paths[position]
             val file = File(path)
-            val fileName = file.name.lowercase()
-            val cleanName = if (fileName.endsWith(".enc")) fileName.removeSuffix(".enc") else fileName
+            val name = fileNames?.getOrNull(position) ?: file.name
+            val isMedia = isVideoOrAudio(name)
 
-            val isVideo = cleanName.endsWith(".mp4") || cleanName.endsWith(".mkv") || cleanName.endsWith(".3gp")
-            val isAudio = cleanName.endsWith(".mp3") || cleanName.endsWith(".wav") || cleanName.endsWith(".m4a")
-
-            if (isVideo || isAudio) {
+            if (isMedia) {
                 holder.imageView.visibility = View.GONE
-                holder.videoView.visibility = View.VISIBLE
+                holder.playerView.visibility = View.VISIBLE
                 holder.videoTouchOverlay.visibility = View.VISIBLE
                 holder.videoControlsLayout.visibility = View.VISIBLE
 
-                holder.currentJob = viewerScope.launch {
-                    val playbackUri = withContext(Dispatchers.IO) {
-                        try {
-                            if (file.name.endsWith(".enc")) {
-                                val tempFile = File.createTempFile("playback_", ".tmp", cacheDir)
-                                tempPlaybackFiles.add(tempFile)
-                                holder.tempVideoFile = tempFile
-                                FileOutputStream(tempFile).use { fos ->
-                                    VaultSecurityManager.decryptFileToStream(file, fos)
-                                }
-                                Uri.fromFile(tempFile)
-                            } else {
-                                Uri.fromFile(file)
-                            }
-                        } catch (e: Exception) {
-                            Log.e(tag, "Failed preparing video: ${e.message}", e)
-                            null
-                        }
-                    }
+                val player = ExoPlayer.Builder(this@MediaViewerActivity).build().apply {
+                    repeatMode = Player.REPEAT_MODE_ALL
+                }
+                holder.exoPlayer = player
+                holder.playerView.player = player
 
-                    if (playbackUri != null) {
-                        holder.videoView.setVideoURI(playbackUri)
-                        holder.videoView.setOnPreparedListener { mp ->
-                            mp.isLooping = true
-                            val dur = holder.videoView.duration
+                val repo = VaultSession.getRepositoryOrNull()
+                val mediaSource = if (repo != null && file.name.endsWith(".enc")) {
+                    val dsFactory = EncryptedVaultDataSource.Factory(VaultCipherStream(), repo.masterKey)
+                    ProgressiveMediaSource.Factory(dsFactory)
+                        .createMediaSource(MediaItem.fromUri(Uri.fromFile(file)))
+                } else {
+                    ProgressiveMediaSource.Factory(DefaultDataSource.Factory(this@MediaViewerActivity))
+                        .createMediaSource(MediaItem.fromUri(Uri.fromFile(file)))
+                }
+
+                player.setMediaSource(mediaSource)
+                player.prepare()
+                player.playWhenReady = true
+
+                player.addListener(object : Player.Listener {
+                    override fun onPlaybackStateChanged(state: Int) {
+                        if (state == Player.STATE_READY) {
+                            val dur = player.duration.coerceAtLeast(0).toInt()
                             holder.videoSeekBar.max = dur
                             holder.tvTotalTime.text = formatTime(dur)
-                            holder.videoView.start()
-                            holder.btnPlayPause.setImageResource(R.drawable.ic_pause_vector)
                             holder.handler.post(holder.progressUpdateRunnable)
                         }
+                    }
 
-                        holder.btnPlayPause.setOnClickListener {
-                            if (holder.videoView.isPlaying) {
-                                holder.videoView.pause()
-                                holder.btnPlayPause.setImageResource(R.drawable.ic_play_vector)
-                            } else {
-                                holder.videoView.start()
-                                holder.btnPlayPause.setImageResource(R.drawable.ic_pause_vector)
-                            }
-                        }
-
-                        holder.btnRewind10.setOnClickListener {
-                            val target = (holder.videoView.currentPosition - 10000).coerceAtLeast(0)
-                            holder.videoView.seekTo(target)
-                            holder.videoSeekBar.progress = target
-                        }
-
-                        holder.btnForward10.setOnClickListener {
-                            val target = (holder.videoView.currentPosition + 10000).coerceAtMost(holder.videoView.duration)
-                            holder.videoView.seekTo(target)
-                            holder.videoSeekBar.progress = target
-                        }
-
-                        holder.videoSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                            override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
-                                if (fromUser) {
-                                    holder.videoView.seekTo(progress)
-                                    holder.tvCurrentTime.text = formatTime(progress)
-                                }
-                            }
-                            override fun onStartTrackingTouch(sb: SeekBar?) {}
-                            override fun onStopTrackingTouch(sb: SeekBar?) {}
-                        })
-
-                        holder.videoTouchOverlay.setOnClickListener {
-                            val isShown = holder.videoControlsLayout.visibility == View.VISIBLE
-                            holder.videoControlsLayout.visibility = if (isShown) View.GONE else View.VISIBLE
+                    override fun onIsPlayingChanged(isPlaying: Boolean) {
+                        if (isPlaying) {
+                            holder.btnPlayPause.setImageResource(R.drawable.ic_pause_vector)
+                        } else {
+                            holder.btnPlayPause.setImageResource(R.drawable.ic_play_vector)
                         }
                     }
+                })
+
+                holder.btnPlayPause.setOnClickListener {
+                    if (player.isPlaying) {
+                        player.pause()
+                    } else {
+                        player.play()
+                    }
                 }
+
+                holder.btnRewind10.setOnClickListener {
+                    val target = (player.currentPosition - 10000).coerceAtLeast(0)
+                    player.seekTo(target)
+                    holder.videoSeekBar.progress = target.toInt()
+                }
+
+                holder.btnForward10.setOnClickListener {
+                    val target = (player.currentPosition + 10000).coerceAtMost(player.duration.coerceAtLeast(0))
+                    player.seekTo(target)
+                    holder.videoSeekBar.progress = target.toInt()
+                }
+
+                holder.videoSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                    override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
+                        if (fromUser) {
+                            player.seekTo(progress.toLong())
+                            holder.tvCurrentTime.text = formatTime(progress)
+                        }
+                    }
+                    override fun onStartTrackingTouch(sb: SeekBar?) {}
+                    override fun onStopTrackingTouch(sb: SeekBar?) {}
+                })
+
+                holder.videoTouchOverlay.setOnClickListener {
+                    val isShown = holder.videoControlsLayout.visibility == View.VISIBLE
+                    holder.videoControlsLayout.visibility = if (isShown) View.GONE else View.VISIBLE
+                }
+
             } else {
-                holder.videoView.visibility = View.GONE
+                holder.playerView.visibility = View.GONE
                 holder.videoTouchOverlay.visibility = View.GONE
                 holder.videoControlsLayout.visibility = View.GONE
                 holder.imageView.visibility = View.VISIBLE
 
-                VaultImageLoader.loadThumbnail(this@MediaViewerActivity, file, holder.imageView, targetWidth = 1080, targetHeight = 1920)
+                holder.currentJob = viewerScope.launch {
+                    val bitmap = withContext(Dispatchers.IO) {
+                        val dm = resources.displayMetrics
+                        VaultImageLoader.decodeImageBitmap(file, dm.widthPixels, dm.heightPixels)
+                    }
+                    if (bitmap != null) {
+                        holder.imageView.setImageBitmap(bitmap)
+                    }
+                }
             }
         }
 
         override fun onViewRecycled(holder: MediaViewHolder) {
             super.onViewRecycled(holder)
             holder.currentJob?.cancel()
-            holder.handler.removeCallbacks(holder.progressUpdateRunnable)
-            if (holder.videoView.visibility == View.VISIBLE) {
-                holder.videoView.stopPlayback()
-            }
-            holder.tempVideoFile?.let {
-                try { it.delete() } catch (ignored: Exception) {}
-            }
+            holder.releasePlayer()
         }
 
         override fun getItemCount(): Int = paths.size

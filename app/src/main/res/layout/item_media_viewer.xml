@@ -12,12 +12,13 @@
         android:layout_height="match_parent"
         android:visibility="gone" />
 
-    <!-- Video Playback View -->
-    <VideoView
-        android:id="@+id/viewerVideo"
+    <!-- Media3 ExoPlayer Playback View -->
+    <androidx.media3.ui.PlayerView
+        android:id="@+id/viewerPlayerView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_centerInParent="true"
+        app:use_controller="false"
         android:visibility="gone" />
 
     <!-- Video Touch Overlay for Toggling Controls -->

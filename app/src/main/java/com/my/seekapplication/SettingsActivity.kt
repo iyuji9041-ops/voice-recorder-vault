@@ -3,6 +3,7 @@ package com.my.seekapplication
 import android.app.Dialog
 import android.content.Intent
 import android.graphics.Color
+import android.net.Uri
 import android.os.Bundle
 import android.text.InputType
 import android.view.View
@@ -15,14 +16,23 @@ import android.widget.RelativeLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.lifecycle.lifecycleScope
+import com.my.seekapplication.data.VaultBackupManager
+import com.my.seekapplication.data.VaultRepository
+import com.my.seekapplication.data.VaultSession
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * SettingsActivity: Vault configuration screen for changing lock types (PIN, Pattern, Password),
- * updating master/decoy keys, configuring secret trigger hold duration, door passcodes, and security recovery.
+ * updating master/decoy keys, configuring secret trigger hold duration, door passcodes, security recovery,
+ * and encrypted offline backup export/import (.svb).
  */
 class SettingsActivity : AppCompatActivity() {
 
@@ -32,6 +42,23 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var tvCurrentHoldDuration: TextView
 
     private var tempRealKeySetup: String? = null
+    private var pendingExportPassword = ""
+
+    private val exportBackupLauncher = registerForActivityResult(
+        ActivityResultContracts.CreateDocument("application/octet-stream")
+    ) { uri ->
+        if (uri != null) {
+            performExport(uri, pendingExportPassword)
+        }
+    }
+
+    private val importBackupLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            promptImportPassword(uri)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -96,6 +123,16 @@ class SettingsActivity : AppCompatActivity() {
 
         btnIntruderSelfie.setOnClickListener {
             startActivity(Intent(this, IntruderListActivity::class.java))
+        }
+
+        val btnExportBackup = findViewById<LinearLayout>(R.id.btnExportBackup)
+        btnExportBackup?.setOnClickListener {
+            promptExportBackup()
+        }
+
+        val btnImportBackup = findViewById<LinearLayout>(R.id.btnImportBackup)
+        btnImportBackup?.setOnClickListener {
+            promptImportBackupFilePicker()
         }
 
         val btnPrivacyPolicy = findViewById<View>(R.id.btnPrivacyPolicy)
@@ -532,5 +569,180 @@ class SettingsActivity : AppCompatActivity() {
             }
         }
         dialog.show()
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // ENCRYPTED BACKUP (.svb) EXPORT & IMPORT
+    // ---------------------------------------------------------------------------------------------
+
+    private fun promptExportBackup() {
+        val repo = VaultSession.getRepositoryOrNull()
+        if (repo == null) {
+            Toast.makeText(this, "Vault session is locked. Please unlock the vault first.", Toast.LENGTH_LONG).show()
+            return
+        }
+
+        val input = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            hint = "Backup Passphrase (min 6 characters)"
+            setPadding(40, 30, 40, 30)
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("Export Encrypted Backup")
+            .setMessage("Set a strong passphrase to encrypt your backup file (.svb). You must remember this passphrase to restore your files in the future:")
+            .setView(input)
+            .setPositiveButton("CONTINUE") { _, _ ->
+                val password = input.text.toString().trim()
+                if (password.length < 6) {
+                    Toast.makeText(this, "Passphrase must be at least 6 characters!", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+                pendingExportPassword = password
+                val defaultFilename = "vault_backup_${System.currentTimeMillis()}.svb"
+                exportBackupLauncher.launch(defaultFilename)
+            }
+            .setNegativeButton("CANCEL", null)
+            .show()
+    }
+
+    private fun performExport(uri: Uri, password: String) {
+        val repo = VaultSession.getRepositoryOrNull()
+        if (repo == null) {
+            Toast.makeText(this, "Vault session is locked.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val progressDialog = AlertDialog.Builder(this)
+            .setTitle("Exporting Vault Backup")
+            .setMessage("Encrypting items... Please wait.")
+            .setCancelable(false)
+            .create()
+        progressDialog.show()
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                contentResolver.openOutputStream(uri)?.use { os ->
+                    val count = VaultBackupManager.exportBackup(
+                        context = applicationContext,
+                        repository = repo,
+                        backupPassword = password,
+                        targetOutputStream = os
+                    ) { current, total ->
+                        runOnUiThread {
+                            progressDialog.setMessage("Encrypting item $current of $total...")
+                        }
+                    }
+                    withContext(Dispatchers.Main) {
+                        progressDialog.dismiss()
+                        AlertDialog.Builder(this@SettingsActivity)
+                            .setTitle("Backup Successful")
+                            .setMessage("Successfully exported $count items to encrypted backup file.\n\nKeep your backup file and passphrase safe.")
+                            .setPositiveButton("OK", null)
+                            .show()
+                    }
+                } ?: run {
+                    withContext(Dispatchers.Main) {
+                        progressDialog.dismiss()
+                        Toast.makeText(this@SettingsActivity, "Failed to open export destination.", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    progressDialog.dismiss()
+                    AlertDialog.Builder(this@SettingsActivity)
+                        .setTitle("Export Failed")
+                        .setMessage("An error occurred during export: ${e.message}")
+                        .setPositiveButton("OK", null)
+                        .show()
+                }
+            }
+        }
+    }
+
+    private fun promptImportBackupFilePicker() {
+        val repo = VaultSession.getRepositoryOrNull()
+        if (repo == null) {
+            Toast.makeText(this, "Vault session is locked. Please unlock the vault first.", Toast.LENGTH_LONG).show()
+            return
+        }
+        importBackupLauncher.launch(arrayOf("*/*"))
+    }
+
+    private fun promptImportPassword(uri: Uri) {
+        val repo = VaultSession.getRepositoryOrNull()
+        if (repo == null) {
+            Toast.makeText(this, "Vault session is locked. Please unlock the vault first.", Toast.LENGTH_LONG).show()
+            return
+        }
+
+        val input = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            hint = "Backup Passphrase"
+            setPadding(40, 30, 40, 30)
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("Restore Encrypted Backup")
+            .setMessage("Enter the passphrase used when creating this .svb backup file:")
+            .setView(input)
+            .setPositiveButton("RESTORE") { _, _ ->
+                val password = input.text.toString().trim()
+                if (password.isEmpty()) {
+                    Toast.makeText(this, "Passphrase cannot be empty!", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+                performImport(uri, password, repo)
+            }
+            .setNegativeButton("CANCEL", null)
+            .show()
+    }
+
+    private fun performImport(uri: Uri, password: String, repo: VaultRepository) {
+        val progressDialog = AlertDialog.Builder(this)
+            .setTitle("Restoring Vault Backup")
+            .setMessage("Decrypting and importing items... Please wait.")
+            .setCancelable(false)
+            .create()
+        progressDialog.show()
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                contentResolver.openInputStream(uri)?.use { isStream ->
+                    val restored = VaultBackupManager.importBackup(
+                        context = applicationContext,
+                        repository = repo,
+                        backupPassword = password,
+                        backupInputStream = isStream
+                    ) { current, total ->
+                        runOnUiThread {
+                            progressDialog.setMessage("Restoring item $current of $total...")
+                        }
+                    }
+                    withContext(Dispatchers.Main) {
+                        progressDialog.dismiss()
+                        AlertDialog.Builder(this@SettingsActivity)
+                            .setTitle("Restore Successful")
+                            .setMessage("Successfully restored $restored items into your vault.")
+                            .setPositiveButton("OK", null)
+                            .show()
+                    }
+                } ?: run {
+                    withContext(Dispatchers.Main) {
+                        progressDialog.dismiss()
+                        Toast.makeText(this@SettingsActivity, "Failed to open selected backup file.", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    progressDialog.dismiss()
+                    AlertDialog.Builder(this@SettingsActivity)
+                        .setTitle("Restore Failed")
+                        .setMessage("Failed to restore backup: ${e.message}\nPlease ensure the passphrase is correct and the backup file is intact.")
+                        .setPositiveButton("OK", null)
+                        .show()
+                }
+            }
+        }
     }
 }

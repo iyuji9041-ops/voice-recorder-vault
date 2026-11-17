@@ -4,36 +4,28 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
-import android.os.Handler
-import android.os.Looper
 import android.util.Log
 import android.util.LruCache
 import android.widget.ImageView
+import com.my.seekapplication.crypto.VaultCipherStream
+import com.my.seekapplication.data.VaultSession
+import com.my.seekapplication.player.EncryptedMediaDataSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.io.FileOutputStream
+import java.io.FileInputStream
 
 /**
- * VaultImageLoader: High-performance asynchronous image & video thumbnail loader.
+ * VaultImageLoader: In-memory streaming image & video thumbnail loader.
  *
- * Changes made & Rationale:
- * [PRIORITY 2 - Requirement 9]:
- * Previously, VaultAdapter called setImageURI(Uri.fromFile(file)) directly on the Main UI thread,
- * and getVideoThumbnail synchronously inside onBindViewHolder. For high-resolution photos (12MP+),
- * this caused severe UI stuttering and OutOfMemoryError crashes.
- *
- * This loader implements:
- * 1. Asynchronous decoding and frame extraction on Coroutines (Dispatchers.IO).
- * 2. In-memory LRU cache to instantly display previously loaded thumbnails without re-decoding.
- * 3. Proportional inSampleSize downsampling so images are resized to the exact display size before
- *    allocating RAM.
- * 4. Direct support for AES-256 encrypted vault files (.enc) by decrypting bytes in-memory without
- *    ever leaking unencrypted files to disk.
- * 5. Job cancellation & tag checking so fast scrolling in RecyclerView cancels obsolete loads.
+ * Guarantees:
+ * 1. ZERO plaintext files on disk: decodes directly from encrypted chunk streams.
+ * 2. NO OutOfMemoryError: uses streaming downsampling with BitmapFactory.Options.inSampleSize.
+ * 3. Video frame thumbnails extracted via EncryptedMediaDataSource directly in memory.
+ * 4. Memory-only LRU Cache, wiped immediately upon session lock.
  */
 object VaultImageLoader {
 
@@ -41,7 +33,7 @@ object VaultImageLoader {
 
     // LRU Cache: 1/8th of available application memory
     private val maxMemory = (Runtime.getRuntime().maxMemory() / 1024).toInt()
-    private val cacheSize = maxMemory / 8
+    private val cacheSize = (maxMemory / 8).coerceAtLeast(1024)
     private val memoryCache = object : LruCache<String, Bitmap>(cacheSize) {
         override fun sizeOf(key: String, bitmap: Bitmap): Int {
             return bitmap.byteCount / 1024
@@ -49,8 +41,9 @@ object VaultImageLoader {
     }
 
     private val loaderScope = CoroutineScope(Dispatchers.Main + Job())
+    private val cipherStream = VaultCipherStream()
 
-    fun clearCache() {
+    fun clearMemoryCache() {
         memoryCache.evictAll()
     }
 
@@ -62,7 +55,8 @@ object VaultImageLoader {
         file: File,
         imageView: ImageView,
         targetWidth: Int = 300,
-        targetHeight: Int = 300
+        targetHeight: Int = 300,
+        mimeType: String? = null
     ) {
         val cacheKey = "${file.absolutePath}_${targetWidth}x${targetHeight}"
 
@@ -77,14 +71,13 @@ object VaultImageLoader {
         imageView.setBackgroundColor(android.graphics.Color.parseColor("#1E1E1E"))
         imageView.setImageDrawable(null)
 
-        // Set tag to avoid mismatched image on RecyclerView recycling
         val tagKey = file.absolutePath
         imageView.tag = tagKey
 
         loaderScope.launch {
             val bitmap = withContext(Dispatchers.IO) {
                 try {
-                    decodeThumbnail(context, file, targetWidth, targetHeight)
+                    decodeThumbnail(file, targetWidth, targetHeight, mimeType)
                 } catch (e: Exception) {
                     Log.e(TAG, "Error loading thumbnail for ${file.name}: ${e.message}", e)
                     null
@@ -104,75 +97,84 @@ object VaultImageLoader {
     }
 
     private fun decodeThumbnail(
-        context: Context,
         file: File,
         reqWidth: Int,
-        reqHeight: Int
+        reqHeight: Int,
+        mimeType: String?
     ): Bitmap? {
-        val fileName = file.name.lowercase()
-        val isEncrypted = fileName.endsWith(".enc")
-        val originalName = if (isEncrypted) fileName.removeSuffix(".enc") else fileName
+        val isVideo = mimeType?.startsWith("video/") == true ||
+                file.name.endsWith(".mp4", ignoreCase = true)
+        val isAudio = mimeType?.startsWith("audio/") == true ||
+                file.name.endsWith(".m4a", ignoreCase = true) ||
+                file.name.endsWith(".mp3", ignoreCase = true)
 
         return when {
-            originalName.endsWith(".mp4") || originalName.endsWith(".mkv") || originalName.endsWith(".3gp") -> {
-                decodeVideoThumbnail(context, file, isEncrypted)
-            }
-            originalName.endsWith(".mp3") || originalName.endsWith(".wav") || originalName.endsWith(".m4a") -> {
-                // Audio does not have an image thumbnail
-                null
-            }
-            else -> {
-                decodeImageBitmap(context, file, isEncrypted, reqWidth, reqHeight)
-            }
+            isVideo -> decodeVideoThumbnail(file)
+            isAudio -> null
+            else -> decodeImageBitmap(file, reqWidth, reqHeight)
         }
     }
 
-    private fun decodeImageBitmap(
-        context: Context,
+    fun decodeImageBitmap(
         file: File,
-        isEncrypted: Boolean,
         reqWidth: Int,
         reqHeight: Int
     ): Bitmap? {
-        val bytes = if (isEncrypted) {
-            VaultSecurityManager.decryptFileToBytes(file)
-        } else {
-            file.readBytes()
+        val repo = VaultSession.getRepositoryOrNull()
+        if (repo == null) {
+            // If unencrypted fallback (e.g. legacy or intruder file)
+            if (!file.name.endsWith(".enc")) {
+                val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeFile(file.absolutePath, options)
+                options.inSampleSize = calculateInSampleSize(options, reqWidth, reqHeight)
+                options.inJustDecodeBounds = false
+                options.inPreferredConfig = Bitmap.Config.RGB_565
+                return BitmapFactory.decodeFile(file.absolutePath, options)
+            }
+            return null
         }
 
-        // Decode bounds to calculate sample size
-        val options = BitmapFactory.Options().apply {
-            inJustDecodeBounds = true
+        val masterKey = repo.masterKey
+
+        try {
+            // First pass: decode bounds to determine inSampleSize without memory allocation
+            val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            cipherStream.getDecryptedStream(file, masterKey).use { stream ->
+                BitmapFactory.decodeStream(stream, null, options)
+            }
+
+            if (options.outWidth <= 0 || options.outHeight <= 0) {
+                return null
+            }
+
+            options.inSampleSize = calculateInSampleSize(options, reqWidth, reqHeight)
+            options.inJustDecodeBounds = false
+            options.inPreferredConfig = Bitmap.Config.RGB_565
+
+            // Second pass: decode downsampled bitmap directly into memory
+            return cipherStream.getDecryptedStream(file, masterKey).use { stream ->
+                BitmapFactory.decodeStream(stream, null, options)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed streaming decode for ${file.name}: ${e.message}")
+            return null
         }
-        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
-
-        options.inSampleSize = calculateInSampleSize(options, reqWidth, reqHeight)
-        options.inJustDecodeBounds = false
-        options.inPreferredConfig = Bitmap.Config.RGB_565 // Conserves 50% memory compared to ARGB_8888
-
-        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
     }
 
-    private fun decodeVideoThumbnail(context: Context, file: File, isEncrypted: Boolean): Bitmap? {
+    private fun decodeVideoThumbnail(file: File): Bitmap? {
+        val repo = VaultSession.getRepositoryOrNull() ?: return null
         val retriever = MediaMetadataRetriever()
-        var tempFile: File? = null
-        try {
-            if (isEncrypted) {
-                tempFile = File.createTempFile("thumb_vid_", ".tmp", context.cacheDir)
-                FileOutputStream(tempFile).use { fos ->
-                    VaultSecurityManager.decryptFileToStream(file, fos)
-                }
-                retriever.setDataSource(tempFile.absolutePath)
-            } else {
-                retriever.setDataSource(file.absolutePath)
-            }
-            return retriever.getFrameAtTime(1000000, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+        return try {
+            val dataSource = EncryptedMediaDataSource(file, cipherStream, repo.masterKey)
+            retriever.setDataSource(dataSource)
+            retriever.getFrameAtTime(1000000, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
         } catch (e: Exception) {
             Log.e(TAG, "Failed video thumbnail extraction: ${e.message}")
-            return null
+            null
         } finally {
-            try { retriever.release() } catch (ignored: Exception) {}
-            tempFile?.delete()
+            try {
+                retriever.release()
+            } catch (ignored: Exception) {}
         }
     }
 
@@ -181,14 +183,14 @@ object VaultImageLoader {
         reqWidth: Int,
         reqHeight: Int
     ): Int {
-        val (height: Int, width: Int) = options.run { outHeight to outWidth }
+        val (height: Int, width: Int) = options.outHeight to options.outWidth
         var inSampleSize = 1
 
         if (height > reqHeight || width > reqWidth) {
             val halfHeight: Int = height / 2
             val halfWidth: Int = width / 2
 
-            while ((halfHeight / inSampleSize) >= reqHeight && (halfWidth / inSampleSize) >= reqWidth) {
+            while (halfHeight / inSampleSize >= reqHeight && halfWidth / inSampleSize >= reqWidth) {
                 inSampleSize *= 2
             }
         }

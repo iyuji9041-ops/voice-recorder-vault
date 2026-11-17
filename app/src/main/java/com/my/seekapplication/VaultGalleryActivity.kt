@@ -22,6 +22,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.my.seekapplication.data.VaultSession
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -215,16 +216,26 @@ class VaultGalleryActivity : AppCompatActivity() {
         return result ?: "vault_${System.currentTimeMillis()}"
     }
 
-    // Encrypt file into persistent vault directory (Survives Clear Data)
+    // Encrypt file into private vault repository with atomic write and UUID naming
     private fun saveFileToVault(uri: Uri) {
+        val repo = VaultSession.getRepositoryOrNull()
+        if (repo == null) {
+            Toast.makeText(this, "Vault session expired. Please unlock again.", Toast.LENGTH_SHORT).show()
+            finish()
+            return
+        }
+
         val originalName = getOriginalFileName(uri)
-        val persistentCatDir = VaultSecurityManager.getCategoryDir(this, currentTab)
-        val targetEncryptedFile = File(persistentCatDir, "${originalName}.enc")
+        val mimeType = contentResolver.getType(uri) ?: when (currentTab) {
+            "Photos" -> "image/jpeg"
+            "Videos" -> "video/mp4"
+            else -> "audio/mp4"
+        }
 
         Toast.makeText(this, "Encrypting & hiding file...", Toast.LENGTH_SHORT).show()
 
         activityScope.launch {
-            val result = withContext(Dispatchers.IO) {
+            val success = withContext(Dispatchers.IO) {
                 try {
                     val inputStream: InputStream? = contentResolver.openInputStream(uri)
                     if (inputStream == null) {
@@ -233,9 +244,13 @@ class VaultGalleryActivity : AppCompatActivity() {
                     }
 
                     inputStream.use { ins ->
-                        VaultSecurityManager.encryptStreamToFile(ins, targetEncryptedFile)
+                        repo.importStream(
+                            source = ins,
+                            originalName = originalName,
+                            category = currentTab,
+                            mimeType = mimeType
+                        )
                     }
-                    Log.d(tag, "Encrypted file saved: ${targetEncryptedFile.absolutePath}")
                     true
                 } catch (e: Exception) {
                     Log.e(tag, "Failed encrypting file into vault: ${e.message}", e)
@@ -243,8 +258,8 @@ class VaultGalleryActivity : AppCompatActivity() {
                 }
             }
 
-            if (result) {
-                Toast.makeText(this@VaultGalleryActivity, "File hidden & encrypted! Please delete original from gallery.", Toast.LENGTH_LONG).show()
+            if (success) {
+                Toast.makeText(this@VaultGalleryActivity, "File hidden & encrypted! Please delete original from public gallery.", Toast.LENGTH_LONG).show()
                 loadHiddenFiles()
             } else {
                 Toast.makeText(this@VaultGalleryActivity, "Error: Encryption failed!", Toast.LENGTH_SHORT).show()
@@ -252,24 +267,17 @@ class VaultGalleryActivity : AppCompatActivity() {
         }
     }
 
-    // Load encrypted files from persistent vault directory
+    // Load encrypted items from active repository
     private fun loadHiddenFiles() {
-        if (isDecoy) {
-            emptyStateLayout.visibility = View.VISIBLE
-            photosRecyclerView.visibility = View.GONE
+        val repo = VaultSession.getRepositoryOrNull()
+        if (repo == null) {
+            finish()
             return
         }
 
-        val persistentDir = VaultSecurityManager.getCategoryDir(this, currentTab)
-        val legacyInternalDir = File(File(filesDir, "vault_encrypted"), currentTab)
+        val items = repo.getItems(currentTab)
 
-        val filesSet = mutableSetOf<File>()
-        persistentDir.listFiles()?.filter { it.isFile && !it.name.startsWith(".") }?.let { filesSet.addAll(it) }
-        legacyInternalDir.listFiles()?.filter { it.isFile && !it.name.startsWith(".") }?.let { filesSet.addAll(it) }
-
-        val fileList = filesSet.sortedByDescending { it.lastModified() }
-
-        if (fileList.isEmpty()) {
+        if (items.isEmpty()) {
             emptyStateLayout.visibility = View.VISIBLE
             photosRecyclerView.visibility = View.GONE
         } else {
@@ -277,7 +285,7 @@ class VaultGalleryActivity : AppCompatActivity() {
             photosRecyclerView.visibility = View.VISIBLE
 
             photosRecyclerView.layoutManager = GridLayoutManager(this, 3)
-            photosRecyclerView.adapter = VaultAdapter(fileList.toMutableList()) { loadHiddenFiles() }
+            photosRecyclerView.adapter = VaultAdapter(items.toMutableList(), repo) { loadHiddenFiles() }
         }
     }
 }
