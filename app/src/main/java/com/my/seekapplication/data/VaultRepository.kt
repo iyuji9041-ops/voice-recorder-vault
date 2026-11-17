@@ -205,7 +205,7 @@ class VaultRepository(
                 tempFile.copyTo(targetFile, overwrite = true)
                 tempFile.delete()
             }
-            val updated = item.copy(fileSizeBytes = targetFile.length())
+            val updated = item.copy(fileSize = targetFile.length())
             itemsMap[item.id] = updated
             persistIndex()
             return updated
