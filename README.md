@@ -196,7 +196,7 @@ To run code quality and lint checks:
 | **Java JDK** | 17 | **21 (via jvmToolchain)** |
 | **Target SDK / Compile SDK** | 36 | **36 (Android 16)** |
 | **Build Configuration** | Groovy DSL (`build.gradle`) | **Kotlin DSL (`build.gradle.kts` + `libs.versions.toml`)** |
-| **AndroidX Core KTX** | 1.8.0 | **1.19.1** |
+| **AndroidX Core KTX** | 1.8.0 | **1.18.0** |
 | **AndroidX AppCompat** | 1.6.1 | **1.8.0** |
 | **Google Material Design** | 1.9.0 | **1.14.0** |
 | **AndroidX ConstraintLayout** | 2.1.4 | **2.2.2** |
