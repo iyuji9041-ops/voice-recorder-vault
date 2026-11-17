@@ -1,7 +1,7 @@
 # Voice Recorder & Secure Vault
 
 [![Android API](https://img.shields.io/badge/Target%20SDK-36%20(Android%2016)-brightgreen.svg)](https://developer.android.com)
-[![Kotlin](https://img.shields.io/badge/Kotlin-1.9.22-blue.svg)](https://kotlinlang.org)
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.4.21-blue.svg)](https://kotlinlang.org)
 [![License](https://img.shields.io/badge/License-MIT-orange.svg)](LICENSE)
 [![Zero Cloud](https://img.shields.io/badge/Cloud%20Data%20Collection-0%25%20(100%25%20Offline)-success.svg)](PRIVACY_POLICY.md)
 
@@ -147,46 +147,81 @@ gentle-ramanujan/
 ```
 The debug APK will be generated at `app/build/outputs/apk/debug/app-debug.apk`.
 
-### Release Build (V1 & V2 Signed)
+### Generating a Release Keystore
+
+To create a secure release keystore for production signing:
+
+```bash
+keytool -genkey -v -keystore release.keystore -alias voicerecorder -keyalg RSA -keysize 2048 -validity 10000
+```
+
+Next, create a `keystore.properties` file in the root project directory (this file is excluded from Git tracking via `.gitignore`):
+
+```properties
+storeFile=release.keystore
+storePassword=YourKeystorePasswordHere
+keyAlias=voicerecorder
+keyPassword=YourKeyPasswordHere
+```
+
+Alternatively, set the corresponding environment variables:
+- `KEYSTORE_FILE`
+- `KEYSTORE_PASSWORD`
+- `KEY_ALIAS`
+- `KEY_PASSWORD`
+
+> [!NOTE]
+> If `keystore.properties` or environment variables are missing, the release build will gracefully fall back to debug signing with a warning, ensuring local builds and CI jobs run without breaking.
+
+### Release Build (Minified & ProGuard Optimized)
 ```bash
 ./gradlew assembleRelease
 ```
 The release APK will be generated at `app/build/outputs/apk/release/app-release.apk`.
 
-To verify APK signature schemes:
+To run code quality and lint checks:
 ```bash
-$ANDROID_HOME/build-tools/35.0.0/apksigner verify --verbose app/build/outputs/apk/release/app-release.apk
+./gradlew lint
 ```
-Expected output:
-```
-Verifies
-Verified using v1 scheme (JAR signing): true
-Verified using v2 scheme (APK Signature Scheme v2): true
-```
+
+---
+
+## Dependency & Tooling Upgrade Reference
+
+| Component / Library | Previous Version | Upgraded Stable Version |
+| :--- | :--- | :--- |
+| **Gradle** | 7.0.2 / 8.11 wrapper | **9.9.1** |
+| **Android Gradle Plugin (AGP)** | 8.11.0 | **9.5.1** |
+| **Kotlin** | 1.9.22 | **2.4.21** |
+| **Java JDK** | 17 | **21 (via jvmToolchain)** |
+| **Target SDK / Compile SDK** | 36 | **36 (Android 16)** |
+| **Build Configuration** | Groovy DSL (`build.gradle`) | **Kotlin DSL (`build.gradle.kts` + `libs.versions.toml`)** |
+| **AndroidX Core KTX** | 1.8.0 | **1.19.1** |
+| **AndroidX AppCompat** | 1.6.1 | **1.8.0** |
+| **Google Material Design** | 1.9.0 | **1.14.0** |
+| **AndroidX ConstraintLayout** | 2.1.4 | **2.2.2** |
+| **AndroidX RecyclerView** | 1.1.0 | **1.4.0** |
+| **AndroidX ViewPager2** | 1.0.0 | **1.1.0** |
+| **AndroidX Activity KTX** | *(implicit / none)* | **1.13.0** |
+| **Kotlinx Coroutines Android** | 1.7.1 | **1.11.0** |
 
 ---
 
 ## Publishing to GitHub
 
-1. **Initialize Git & Commit**:
+1. **Commit changes**:
    ```bash
-   git init
    git add .
-   git commit -m "feat: complete voice recorder decoy vault with targetSdk 36, adaptive icon, and recovery"
+   git commit -m "chore: modernize build to Kotlin DSL, latest stable dependencies, and secure signing"
    ```
 
-2. **Add Remote & Push**:
+2. **Push to Remote**:
    ```bash
-   git remote add origin https://github.com/iyuji9041-ops/voice-recorder-vault.git
-   git branch -M main
-   git push -u origin main
+   git push origin main
    ```
 
-3. **Enable GitHub Pages for Privacy Policy**:
-   - In your GitHub repository, navigate to **Settings** > **Pages**.
-   - Under **Source**, select `Deploy from a branch`.
-   - Branch: `main`, Folder: `/docs`.
-   - Click **Save**. Your privacy policy will be live at `https://iyuji9041-ops.github.io/voice-recorder-vault/`.
+3. **Verify CI Status**:
+   GitHub Actions automatically builds Debug and Release APKs and executes Android Lint on push.
 
 ---
 

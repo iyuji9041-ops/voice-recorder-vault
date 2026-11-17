@@ -1,24 +1,20 @@
 *.iml
-.gradle
+.gradle/
 /local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
+local.properties
+.idea/
 .DS_Store
-/build
+/build/
+build/
+app/build/
 /captures
 .externalNativeBuild
 .cxx
-local.properties
-
-# Android Build Outputs
-app/build/
-build/
 *.apk
 *.aab
+
+# Kotlin
+.kotlin/
 
 # Keystores & Release Signing Secrets (STRICTLY PRIVATE - NEVER COMMIT)
 *.keystore
@@ -27,5 +23,5 @@ keystore.properties
 *.key
 *.p12
 
-# PocketDev / Environment internals
+# Environment & IDE internals
 .pocketdev/

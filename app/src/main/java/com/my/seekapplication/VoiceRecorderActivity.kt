@@ -29,6 +29,7 @@ import android.widget.ImageView
 import android.widget.RelativeLayout
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -127,8 +128,7 @@ class VoiceRecorderActivity : AppCompatActivity() {
         // FLAG_SECURE prevents screen recording
         window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
         supportActionBar?.hide()
-        window.navigationBarColor = Color.parseColor("#0A0A0A")
-        window.statusBarColor = Color.parseColor("#0A0A0A")
+        enableEdgeToEdge()
 
         setContentView(R.layout.activity_voice_recorder)
 

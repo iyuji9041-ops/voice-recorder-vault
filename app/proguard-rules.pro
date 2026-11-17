@@ -1,21 +1,36 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# ProGuard / R8 rules for Voice Recorder & Secure Vault
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# Keep all AndroidManifest entry points
+-keep public class * extends android.app.Activity
+-keep public class * extends android.app.Application
+-keep public class * extends android.app.Service
+-keep public class * extends android.content.BroadcastReceiver
+-keep public class * extends android.content.ContentProvider
+-keep public class * extends androidx.core.content.FileProvider
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# Keep custom Views referenced in XML layouts
+-keep class com.my.seekapplication.PatternLockView { *; }
+-keep class com.my.seekapplication.ZoomableImageView { *; }
+-keep public class * extends android.view.View {
+    public <init>(android.content.Context);
+    public <init>(android.content.Context, android.util.AttributeSet);
+    public <init>(android.content.Context, android.util.AttributeSet, int);
+    public void set*(...);
+}
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# Keep RecyclerView ViewHolders and Adapters
+-keep class * extends androidx.recyclerview.widget.RecyclerView$ViewHolder { *; }
+-keep class * extends androidx.recyclerview.widget.RecyclerView$Adapter { *; }
+
+# Keep security, cryptography, and model classes
+-keep class com.my.seekapplication.VaultSecurityManager { *; }
+-keep class com.my.seekapplication.IntruderCamera { *; }
+-keep class com.my.seekapplication.VaultAdapter$* { *; }
+
+# Keep Kotlin Coroutines
+-dontwarn kotlinx.coroutines.**
+-keep class kotlinx.coroutines.** { *; }
+
+# Line numbers & attributes for readable stack traces
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile

@@ -19,6 +19,7 @@ import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import android.widget.VideoView
+import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -65,8 +66,7 @@ class MediaViewerActivity : AppCompatActivity() {
         // FLAG_SECURE prevents screenshots and screen recording
         window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
         supportActionBar?.hide()
-        window.navigationBarColor = Color.parseColor("#000000")
-        window.statusBarColor = Color.parseColor("#000000")
+        enableEdgeToEdge()
 
         setContentView(R.layout.activity_media_viewer)
 
@@ -82,6 +82,7 @@ class MediaViewerActivity : AppCompatActivity() {
         ViewCompat.setOnApplyWindowInsetsListener(rootMediaViewer) { _, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
             val density = resources.displayMetrics.density
+            rootMediaViewer.setPadding(systemBars.left, 0, systemBars.right, 0)
             viewerTopBar.layoutParams.height = (56 * density).toInt() + systemBars.top
             viewerTopBar.setPadding(viewerTopBar.paddingLeft, systemBars.top, viewerTopBar.paddingRight, 0)
             
