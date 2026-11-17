@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/rootVaultGallery"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -22,7 +23,7 @@
                 android:layout_width="26dp"
                 android:layout_height="26dp"
                 android:src="@drawable/ic_shield_vector"
-                android:tint="#00E676" />
+                app:tint="#00E676" />
 
             <TextView
                 android:id="@+id/vaultTitle"
@@ -44,7 +45,7 @@
             android:background="@drawable/bg_glass_input"
             android:padding="10dp"
             android:src="@drawable/ic_gear_hq"
-            android:tint="#00E676"
+            app:tint="#00E676"
             android:contentDescription="Vault Settings"
             android:clickable="true"
             android:focusable="true" />
@@ -108,7 +109,7 @@
             android:layout_width="80dp"
             android:layout_height="80dp"
             android:src="@drawable/ic_shield_vector"
-            android:tint="#3300E676"
+            app:tint="#3300E676"
             android:layout_marginBottom="16dp"/>
 
         <TextView
@@ -160,7 +161,7 @@
             android:layout_height="26dp"
             android:layout_centerInParent="true"
             android:src="@drawable/ic_add_vector"
-            android:tint="#00E676"/>
+            app:tint="#00E676"/>
     </RelativeLayout>
 
 </RelativeLayout>

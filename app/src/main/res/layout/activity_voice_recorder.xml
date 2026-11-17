@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/rootVoiceRecorder"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -48,7 +49,7 @@
             android:layout_height="36dp"
             android:layout_centerVertical="true"
             android:src="@drawable/ic_back_vector"
-            android:tint="#FFFFFF"
+            app:tint="#FFFFFF"
             android:padding="6dp"
             android:clickable="true"
             android:focusable="true" />
@@ -78,7 +79,7 @@
                 android:layout_height="38dp"
                 android:layout_marginEnd="8dp"
                 android:src="@drawable/ic_select_all_vector"
-                android:tint="#00E676"
+                app:tint="#00E676"
                 android:background="@drawable/bg_glass_input"
                 android:padding="8dp"
                 android:clickable="true"
@@ -89,7 +90,7 @@
                 android:layout_width="38dp"
                 android:layout_height="38dp"
                 android:src="@drawable/ic_delete_vector"
-                android:tint="#FF5252"
+                app:tint="#FF5252"
                 android:background="@drawable/bg_glass_input"
                 android:padding="8dp"
                 android:clickable="true"
@@ -181,7 +182,7 @@
                     android:layout_width="30dp"
                     android:layout_height="30dp"
                     android:src="@drawable/ic_mic_vector"
-                    android:tint="#FFFFFF" />
+                    app:tint="#FFFFFF" />
             </RelativeLayout>
         </RelativeLayout>
     </RelativeLayout>

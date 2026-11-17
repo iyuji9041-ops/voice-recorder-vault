@@ -498,12 +498,17 @@ class VoiceRecorderActivity : AppCompatActivity() {
      * browsed and accessed in the phone's Files / Storage app.
      */
     private fun getRecordingsFolder(): File {
-        val publicRecordings = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_RECORDINGS)
+        val dirName = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            Environment.DIRECTORY_RECORDINGS
+        } else {
+            "Recordings"
+        }
+        val publicRecordings = Environment.getExternalStoragePublicDirectory(dirName)
         val dir = File(publicRecordings, "MyVoiceRecordings")
         if (!dir.exists()) {
             if (!dir.mkdirs()) {
                 // Fallback to app external files dir if public root is inaccessible
-                val fallbackDir = File(getExternalFilesDir(Environment.DIRECTORY_RECORDINGS) ?: filesDir, "Recordings")
+                val fallbackDir = File(getExternalFilesDir(dirName) ?: filesDir, "Recordings")
                 if (!fallbackDir.exists()) fallbackDir.mkdirs()
                 return fallbackDir
             }

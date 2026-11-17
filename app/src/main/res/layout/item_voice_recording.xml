@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/recordingCardRoot"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
@@ -16,7 +17,7 @@
         android:layout_centerVertical="true"
         android:layout_marginEnd="10dp"
         android:src="@drawable/ic_check_vector"
-        android:tint="#00E676"
+        app:tint="#00E676"
         android:visibility="gone" />
 
     <!-- Play/Pause Button -->
@@ -27,7 +28,7 @@
         android:layout_toEndOf="@+id/ivSelectCheck"
         android:layout_centerVertical="true"
         android:src="@drawable/ic_play_vector"
-        android:tint="#00E676"
+        app:tint="#00E676"
         android:background="@drawable/bg_glass_input"
         android:padding="10dp"
         android:clickable="true"
@@ -102,7 +103,7 @@
             android:layout_height="36dp"
             android:layout_marginEnd="6dp"
             android:src="@drawable/ic_share_vector"
-            android:tint="#00E676"
+            app:tint="#00E676"
             android:background="@drawable/bg_glass_input"
             android:padding="8dp"
             android:clickable="true"
@@ -113,7 +114,7 @@
             android:layout_width="36dp"
             android:layout_height="36dp"
             android:src="@drawable/ic_delete_vector"
-            android:tint="#FF5252"
+            app:tint="#FF5252"
             android:background="@drawable/bg_glass_input"
             android:padding="8dp"
             android:clickable="true"

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/rootSettings"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -20,7 +21,7 @@
             android:layout_height="40dp"
             android:layout_centerVertical="true"
             android:src="@drawable/ic_back_vector"
-            android:tint="#FFFFFF"
+            app:tint="#FFFFFF"
             android:background="@drawable/bg_glass_input"
             android:padding="8dp"
             android:clickable="true"
@@ -79,7 +80,7 @@
                     android:layout_width="28dp"
                     android:layout_height="28dp"
                     android:src="@drawable/ic_lock_type_vector"
-                    android:tint="#00E676"
+                    app:tint="#00E676"
                     android:layout_marginEnd="16dp" />
 
                 <LinearLayout
@@ -136,7 +137,7 @@
                     android:layout_width="28dp"
                     android:layout_height="28dp"
                     android:src="@drawable/ic_key_vector"
-                    android:tint="#00E676"
+                    app:tint="#00E676"
                     android:layout_marginEnd="16dp" />
 
                 <LinearLayout
@@ -185,7 +186,7 @@
                     android:layout_width="28dp"
                     android:layout_height="28dp"
                     android:src="@drawable/ic_shield_vector"
-                    android:tint="#00E676"
+                    app:tint="#00E676"
                     android:layout_marginEnd="16dp" />
 
                 <LinearLayout
@@ -234,7 +235,7 @@
                     android:layout_width="28dp"
                     android:layout_height="28dp"
                     android:src="@drawable/ic_mic_vector"
-                    android:tint="#00E676"
+                    app:tint="#00E676"
                     android:layout_marginEnd="16dp" />
 
                 <LinearLayout
@@ -291,7 +292,7 @@
                     android:layout_width="28dp"
                     android:layout_height="28dp"
                     android:src="@drawable/ic_pin_vector"
-                    android:tint="#00E676"
+                    app:tint="#00E676"
                     android:layout_marginEnd="16dp" />
 
                 <LinearLayout
@@ -339,7 +340,7 @@
                     android:layout_width="28dp"
                     android:layout_height="28dp"
                     android:src="@drawable/ic_help_vector"
-                    android:tint="#00E676"
+                    app:tint="#00E676"
                     android:layout_marginEnd="16dp" />
 
                 <LinearLayout
@@ -397,7 +398,7 @@
                     android:layout_width="28dp"
                     android:layout_height="28dp"
                     android:src="@drawable/ic_camera_vector"
-                    android:tint="#00E676"
+                    app:tint="#00E676"
                     android:layout_marginEnd="16dp" />
 
                 <LinearLayout
@@ -455,7 +456,7 @@
                     android:layout_width="28dp"
                     android:layout_height="28dp"
                     android:src="@drawable/ic_shield_vector"
-                    android:tint="#00E676"
+                    app:tint="#00E676"
                     android:layout_marginEnd="16dp" />
 
                 <LinearLayout
@@ -485,7 +486,7 @@
                     android:layout_width="20dp"
                     android:layout_height="20dp"
                     android:src="@drawable/ic_play_vector"
-                    android:tint="#66FFFFFF" />
+                    app:tint="#66FFFFFF" />
             </LinearLayout>
 
         </LinearLayout>

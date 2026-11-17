@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="340dp"
     android:layout_height="wrap_content"
     android:background="@drawable/bg_glass_dialog"
@@ -17,7 +18,7 @@
             android:layout_width="24dp"
             android:layout_height="24dp"
             android:src="@drawable/ic_lock_type_vector"
-            android:tint="#00E676"
+            app:tint="#00E676"
             android:layout_marginEnd="8dp" />
 
         <TextView
@@ -56,7 +57,7 @@
             android:layout_width="24dp"
             android:layout_height="24dp"
             android:src="@drawable/ic_pin_vector"
-            android:tint="#00E676"
+            app:tint="#00E676"
             android:layout_marginEnd="12dp" />
 
         <TextView
@@ -93,7 +94,7 @@
             android:layout_width="24dp"
             android:layout_height="24dp"
             android:src="@drawable/ic_pattern_vector"
-            android:tint="#00E676"
+            app:tint="#00E676"
             android:layout_marginEnd="12dp" />
 
         <TextView
@@ -130,7 +131,7 @@
             android:layout_width="24dp"
             android:layout_height="24dp"
             android:src="@drawable/ic_key_vector"
-            android:tint="#00E676"
+            app:tint="#00E676"
             android:layout_marginEnd="12dp" />
 
         <TextView
