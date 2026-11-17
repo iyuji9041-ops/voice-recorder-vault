@@ -285,41 +285,57 @@ class VaultCipherStream(
     }
 
     /**
-     * Returns a streaming decrypted InputStream over the encrypted file.
+     * SeekableDecryptedStream: In-memory seekable streaming InputStream over the encrypted file.
+     * Decrypts 64 KB chunks on the fly without loading the whole file into RAM or writing plaintext to disk.
+     */
+    open class SeekableDecryptedStream(
+        private val cipherStream: VaultCipherStream,
+        private val file: File,
+        private val key: SecretKey,
+        val totalPlaintextSize: Long
+    ) : InputStream() {
+        private var position = 0L
+        private val singleByteBuf = ByteArray(1)
+
+        fun seek(newPosition: Long) {
+            position = newPosition.coerceIn(0L, totalPlaintextSize)
+        }
+
+        fun currentPosition(): Long = position
+
+        override fun read(): Int {
+            val count = read(singleByteBuf, 0, 1)
+            return if (count <= 0) -1 else singleByteBuf[0].toInt() and 0xFF
+        }
+
+        override fun read(b: ByteArray, off: Int, len: Int): Int {
+            if (len == 0) return 0
+            if (position >= totalPlaintextSize) return -1
+            val readCount = cipherStream.readBytes(file, position, b, off, len, key)
+            if (readCount <= 0) return -1
+            position += readCount
+            return readCount
+        }
+
+        override fun skip(n: Long): Long {
+            if (n <= 0) return 0
+            val skipped = minOf(n, totalPlaintextSize - position)
+            position += skipped
+            return skipped
+        }
+
+        override fun available(): Int {
+            val remaining = totalPlaintextSize - position
+            return if (remaining > Int.MAX_VALUE) Int.MAX_VALUE else remaining.toInt()
+        }
+    }
+
+    /**
+     * Returns a streaming decrypted SeekableDecryptedStream over the encrypted file.
      * Reads chunks on the fly without loading the whole file into memory.
      */
-    fun getDecryptedStream(file: File, key: SecretKey): InputStream {
+    fun getDecryptedStream(file: File, key: SecretKey): SeekableDecryptedStream {
         val header = readHeader(file)
-        return object : InputStream() {
-            private var currentPosition = 0L
-            private val totalPlaintextSize = header.plaintextSize
-            private val singleByteBuf = ByteArray(1)
-
-            override fun read(): Int {
-                val count = read(singleByteBuf, 0, 1)
-                return if (count <= 0) -1 else singleByteBuf[0].toInt() and 0xFF
-            }
-
-            override fun read(b: ByteArray, off: Int, len: Int): Int {
-                if (len == 0) return 0
-                if (currentPosition >= totalPlaintextSize) return -1
-                val readCount = readBytes(file, currentPosition, b, off, len, key)
-                if (readCount <= 0) return -1
-                currentPosition += readCount
-                return readCount
-            }
-
-            override fun skip(n: Long): Long {
-                if (n <= 0) return 0
-                val skipped = minOf(n, totalPlaintextSize - currentPosition)
-                currentPosition += skipped
-                return skipped
-            }
-
-            override fun available(): Int {
-                val remaining = totalPlaintextSize - currentPosition
-                return if (remaining > Int.MAX_VALUE) Int.MAX_VALUE else remaining.toInt()
-            }
-        }
+        return SeekableDecryptedStream(this, file, key, header.plaintextSize)
     }
 }
