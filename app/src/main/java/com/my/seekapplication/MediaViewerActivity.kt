@@ -52,6 +52,7 @@ import java.util.Locale
  * 2. In-memory AES-256-GCM chunk streaming with seek support via EncryptedVaultDataSource.
  * 3. Android 16 Edge-to-Edge with notch / cutout protection.
  */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class MediaViewerActivity : AppCompatActivity() {
 
     private val tag = "MediaViewerActivity"

@@ -15,6 +15,7 @@ import javax.crypto.SecretKey
  * EncryptedVaultDataSource: Streaming Media3 DataSource that decrypts AES-256-GCM chunks on the fly.
  * Allows ExoPlayer to seek to any arbitrary timestamp without creating plaintext files on disk.
  */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class EncryptedVaultDataSource(
     private val cipherStream: VaultCipherStream,
     private val masterKey: SecretKey
@@ -89,6 +90,7 @@ class EncryptedVaultDataSource(
         uri = null
     }
 
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
     class Factory(
         private val cipherStream: VaultCipherStream,
         private val masterKey: SecretKey

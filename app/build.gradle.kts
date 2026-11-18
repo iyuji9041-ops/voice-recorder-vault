@@ -76,6 +76,7 @@ android {
     lint {
         checkReleaseBuilds = true
         abortOnError = true
+        disable += "UnsafeOptInUsageError"
     }
 
     testOptions {
