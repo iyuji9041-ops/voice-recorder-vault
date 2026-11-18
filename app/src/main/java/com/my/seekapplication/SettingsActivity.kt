@@ -748,7 +748,15 @@ class SettingsActivity : BaseVaultActivity() {
 
         lifecycleScope.launch {
             val count = withContext(Dispatchers.IO) {
-                VaultBackupManager.exportBackup(this@SettingsActivity, repo, destUri, pass)
+                try {
+                    val outputStream = contentResolver.openOutputStream(destUri) ?: return@withContext -1
+                    outputStream.use { os ->
+                        VaultBackupManager.exportBackup(this@SettingsActivity, repo, pass, os)
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("SettingsActivity", "Export error: ${e.message}", e)
+                    -1
+                }
             }
             if (count >= 0) {
                 Toast.makeText(this@SettingsActivity, "Backup exported successfully ($count items)!", Toast.LENGTH_LONG).show()
@@ -807,7 +815,15 @@ class SettingsActivity : BaseVaultActivity() {
 
         lifecycleScope.launch {
             val count = withContext(Dispatchers.IO) {
-                VaultBackupManager.importBackup(this@SettingsActivity, sourceUri, pass, repo)
+                try {
+                    val inputStream = contentResolver.openInputStream(sourceUri) ?: return@withContext -1
+                    inputStream.use { ins ->
+                        VaultBackupManager.importBackup(this@SettingsActivity, repo, pass, ins)
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("SettingsActivity", "Import error: ${e.message}", e)
+                    -1
+                }
             }
             if (count >= 0) {
                 Toast.makeText(this@SettingsActivity, "Restored $count items into vault!", Toast.LENGTH_LONG).show()
