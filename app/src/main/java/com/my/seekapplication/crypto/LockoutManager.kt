@@ -118,6 +118,10 @@ class LockoutManager(
         val remaining = remainingSaved - elapsed
 
         return if (remaining > 0L) {
+            prefs.edit()
+                .putLong(keyRemainingMs(target), remaining)
+                .putLong(keyStartElapsed(target), currentElapsed)
+                .apply()
             remaining
         } else {
             // Lockout expired: clear lockout duration while keeping failure counter
