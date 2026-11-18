@@ -49,15 +49,16 @@ object SetupWizardManager {
         return testPrefs ?: context!!.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     }
 
-    fun isSetupCompleted(context: Context): Boolean {
+    fun isSetupCompleted(context: Context? = null): Boolean {
         val prefs = getPrefs(context)
-        val keyManager = VaultKeyManager(context)
-        return prefs.getBoolean(KEY_SETUP_COMPLETED, false) && keyManager.isVaultConfigured()
+        val keyManager = context?.let { VaultKeyManager(it) }
+        return prefs.getBoolean(KEY_SETUP_COMPLETED, false) && (keyManager?.isVaultConfigured() ?: false)
     }
 
-    fun getCurrentStage(context: Context): Stage {
-        if (isSetupCompleted(context)) return Stage.COMPLETED
-        val name = getPrefs(context).getString(KEY_SETUP_STAGE, Stage.NOT_STARTED.name)
+    fun getCurrentStage(context: Context? = null): Stage {
+        val prefs = getPrefs(context)
+        if (prefs.getBoolean(KEY_SETUP_COMPLETED, false)) return Stage.COMPLETED
+        val name = prefs.getString(KEY_SETUP_STAGE, Stage.NOT_STARTED.name)
         return try {
             Stage.valueOf(name ?: Stage.NOT_STARTED.name)
         } catch (e: Exception) {
@@ -65,7 +66,7 @@ object SetupWizardManager {
         }
     }
 
-    fun setStage(context: Context, stage: Stage) {
+    fun setStage(context: Context? = null, stage: Stage) {
         getPrefs(context).edit().putString(KEY_SETUP_STAGE, stage.name).apply()
     }
 
@@ -73,18 +74,18 @@ object SetupWizardManager {
     // STAGED VALUES ACCESSORS
     // ---------------------------------------------------------------------------------------------
 
-    fun stageDoorCode(context: Context, code: String) {
+    fun stageDoorCode(context: Context? = null, code: String) {
         getPrefs(context).edit()
             .putString(KEY_STAGED_DOOR_CODE, code.trim())
             .putString(KEY_SETUP_STAGE, Stage.VAULT_REAL_KEY.name)
             .apply()
     }
 
-    fun getStagedDoorCode(context: Context): String? {
+    fun getStagedDoorCode(context: Context? = null): String? {
         return getPrefs(context).getString(KEY_STAGED_DOOR_CODE, null)
     }
 
-    fun stageRealKey(context: Context, lockType: VaultSecurityManager.LockType, key: String) {
+    fun stageRealKey(context: Context? = null, lockType: VaultSecurityManager.LockType, key: String) {
         getPrefs(context).edit()
             .putString(KEY_STAGED_LOCK_TYPE, lockType.name)
             .putString(KEY_STAGED_REAL_KEY, key.trim())
@@ -92,11 +93,11 @@ object SetupWizardManager {
             .apply()
     }
 
-    fun getStagedRealKey(context: Context): String? {
+    fun getStagedRealKey(context: Context? = null): String? {
         return getPrefs(context).getString(KEY_STAGED_REAL_KEY, null)
     }
 
-    fun getStagedLockType(context: Context): VaultSecurityManager.LockType {
+    fun getStagedLockType(context: Context? = null): VaultSecurityManager.LockType {
         val name = getPrefs(context).getString(KEY_STAGED_LOCK_TYPE, VaultSecurityManager.LockType.PIN.name)
         return try {
             VaultSecurityManager.LockType.valueOf(name ?: VaultSecurityManager.LockType.PIN.name)
@@ -105,18 +106,18 @@ object SetupWizardManager {
         }
     }
 
-    fun stageDecoyKey(context: Context, key: String) {
+    fun stageDecoyKey(context: Context? = null, key: String) {
         getPrefs(context).edit()
             .putString(KEY_STAGED_DECOY_KEY, key.trim())
             .putString(KEY_SETUP_STAGE, Stage.RECOVERY_CODE.name)
             .apply()
     }
 
-    fun getStagedDecoyKey(context: Context): String? {
+    fun getStagedDecoyKey(context: Context? = null): String? {
         return getPrefs(context).getString(KEY_STAGED_DECOY_KEY, null)
     }
 
-    fun stageRecoveryCode(context: Context, code: String, question: String? = null, answer: String? = null) {
+    fun stageRecoveryCode(context: Context? = null, code: String, question: String? = null, answer: String? = null) {
         val editor = getPrefs(context).edit()
             .putString(KEY_STAGED_RECOVERY_CODE, VaultKeyManager.normalizeRecoveryCode(code))
             .putString(KEY_SETUP_STAGE, Stage.CAMERA_PERMISSION.name)
@@ -128,7 +129,7 @@ object SetupWizardManager {
         editor.apply()
     }
 
-    fun getStagedRecoveryCode(context: Context): String {
+    fun getStagedRecoveryCode(context: Context? = null): String {
         var code = getPrefs(context).getString(KEY_STAGED_RECOVERY_CODE, null)
         if (code.isNullOrEmpty()) {
             code = VaultKeyManager.generateRecoveryCode()
@@ -210,7 +211,7 @@ object SetupWizardManager {
     /**
      * Wipes setup state and temporary storage.
      */
-    fun resetSetup(context: Context) {
+    fun resetSetup(context: Context? = null) {
         getPrefs(context).edit().clear().apply()
     }
 }

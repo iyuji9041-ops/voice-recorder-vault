@@ -95,7 +95,7 @@ class IntruderPhotoCryptoTest {
 
         // Tamper with the last byte of ciphertext (auth tag corruption)
         val fileBytes = encryptedFile!!.readBytes()
-        fileBytes[fileBytes.size - 1] = (fileBytes[fileBytes.size - 1] xor 0xFF.toByte())
+        fileBytes[fileBytes.size - 1] = (fileBytes[fileBytes.size - 1].toInt() xor 0xFF).toByte()
         encryptedFile.writeBytes(fileBytes)
 
         val privKey = IntruderPhotoCrypto.loadPrivateKey(masterKey = realMasterKey)!!
