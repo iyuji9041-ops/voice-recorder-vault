@@ -171,3 +171,14 @@ Failed authentication attempts trigger silent background photograph capture usin
 - **Cipher:** AES-256-GCM chunked stream derived via `PBKDF2-HMAC-SHA256` (600,000 iterations) using a custom backup passphrase.
 - **Payload:** Encrypted ZIP archive containing `manifest.json` and `files/<id>.dat`.
 - **Restoration Safety:** Backup imports decrypt each item directly into the active vault sandbox.
+
+---
+
+## 10. Media Import, Restoration & Safe Editing Pipeline (Phase 4)
+
+- **Verification-First Import:** Files are encrypted into random `<uuid>.enc` vault files and validated against their source byte size and SHA-256 checksum prior to prompting original file deletion.
+- **Truthful Original Deletion:** Uses `MediaStore.createDeleteRequest` (Android 11+) and direct removal on legacy OS. Accurately reports whether originals were purged or kept in gallery.
+- **Atomic MediaStore Restoration (`VaultRestoreManager`):** Writes restored files into appropriate MediaStore collections (Pictures, Movies, Music, Downloads) using `IS_PENDING = 1` during write. The vault copy is deleted ONLY after the restored file is verified (size and checksum). If any write or verification step fails, the MediaStore row is immediately deleted and the vault copy is left intact.
+- **Atomic Photo Editing:** Offers choice of "Save Copy" vs "Replace Original". Preserves input formats (PNG, WEBP, JPEG), prevents OutOfMemory errors via downsampling, and respects EXIF orientation metadata.
+- **Lifecycle Scopes:** Replaced manual CoroutineScopes with `lifecycleScope` to prevent leaked background jobs upon activity destruction.
+- **Stored MIME Classification (`MediaTypeHelper`):** Relies on encrypted index MIME types rather than fragile filename extensions to classify media.

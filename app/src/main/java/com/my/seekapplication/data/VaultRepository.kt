@@ -200,12 +200,12 @@ class VaultRepository(
         val targetFile = getFileForItem(item)
         val tempFile = File(vaultDir, ".tmp_${item.id}.enc")
         try {
-            cipherStream.encryptStreamToFile(source, tempFile, masterKey)
+            val plaintextSize = cipherStream.encryptStreamToFile(source, tempFile, masterKey)
             if (!tempFile.renameTo(targetFile)) {
                 tempFile.copyTo(targetFile, overwrite = true)
                 tempFile.delete()
             }
-            val updated = item.copy(fileSize = targetFile.length())
+            val updated = item.copy(fileSize = plaintextSize)
             itemsMap[item.id] = updated
             persistIndex()
             return updated

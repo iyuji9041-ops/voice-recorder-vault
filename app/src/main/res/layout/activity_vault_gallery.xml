@@ -6,7 +6,7 @@
     android:layout_height="match_parent"
     android:background="#0A0A0A">
 
-    <!-- Top Bar -->
+    <!-- Normal Top Bar -->
     <RelativeLayout
         android:id="@+id/topBar"
         android:layout_width="match_parent"
@@ -49,6 +49,85 @@
             android:contentDescription="Vault Settings"
             android:clickable="true"
             android:focusable="true" />
+    </RelativeLayout>
+
+    <!-- Selection Mode Top Bar (Overlay) -->
+    <RelativeLayout
+        android:id="@+id/layoutSelectionBar"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:background="#1C1C1E"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:visibility="gone">
+
+        <ImageView
+            android:id="@+id/btnCloseSelection"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_alignParentStart="true"
+            android:layout_centerVertical="true"
+            android:background="@drawable/bg_glass_input"
+            android:padding="8dp"
+            android:src="@drawable/ic_back_vector"
+            app:tint="#FFFFFF"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <TextView
+            android:id="@+id/tvSelectionCount"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_toEndOf="@+id/btnCloseSelection"
+            android:layout_centerVertical="true"
+            android:layout_marginStart="12dp"
+            android:text="0 selected"
+            android:textColor="#FFFFFF"
+            android:textSize="17sp"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentEnd="true"
+            android:layout_centerVertical="true"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:id="@+id/btnSelectAll"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/bg_glass_input"
+                android:padding="9dp"
+                android:src="@drawable/ic_select_all_vector"
+                app:tint="#FFFFFF"
+                android:layout_marginEnd="8dp"
+                android:clickable="true"
+                android:focusable="true" />
+
+            <ImageView
+                android:id="@+id/btnRestoreSelected"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/bg_glass_input"
+                android:padding="9dp"
+                android:src="@drawable/ic_download_vector"
+                app:tint="#00E676"
+                android:layout_marginEnd="8dp"
+                android:clickable="true"
+                android:focusable="true" />
+
+            <ImageView
+                android:id="@+id/btnDeleteSelected"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/bg_glass_input"
+                android:padding="9dp"
+                android:src="@drawable/ic_delete_vector"
+                app:tint="#FF5252"
+                android:clickable="true"
+                android:focusable="true" />
+        </LinearLayout>
     </RelativeLayout>
 
     <!-- Modern Segmented Pill Tabs -->
@@ -143,6 +222,87 @@
         android:clipToPadding="false"
         android:visibility="gone"/>
 
+    <!-- Inline Audio Player Bar (Audios Tab) -->
+    <RelativeLayout
+        android:id="@+id/layoutAudioPlayerBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:layout_marginBottom="16dp"
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="12dp"
+        android:background="@drawable/bg_glass_dialog"
+        android:padding="10dp"
+        android:elevation="8dp"
+        android:visibility="gone">
+
+        <ImageView
+            android:id="@+id/btnAudioPlayPause"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_alignParentStart="true"
+            android:layout_centerVertical="true"
+            android:background="@drawable/bg_glass_fab_round"
+            android:padding="10dp"
+            android:src="@drawable/ic_play_vector"
+            app:tint="#00E676"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_toEndOf="@+id/btnAudioPlayPause"
+            android:layout_toStartOf="@+id/btnCloseAudio"
+            android:layout_centerVertical="true"
+            android:layout_marginStart="10dp"
+            android:layout_marginEnd="6dp"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/tvAudioTrackTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Track Title"
+                android:textColor="#FFFFFF"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:singleLine="true"
+                android:ellipsize="end" />
+
+            <SeekBar
+                android:id="@+id/audioPlayerSeekBar"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:progressTint="#00E676"
+                android:thumbTint="#00E676"
+                android:paddingStart="0dp"
+                android:paddingEnd="0dp"
+                android:layout_marginTop="2dp" />
+
+            <TextView
+                android:id="@+id/tvAudioTrackTime"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="00:00 / 00:00"
+                android:textColor="#88FFFFFF"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <ImageView
+            android:id="@+id/btnCloseAudio"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_alignParentEnd="true"
+            android:layout_alignParentTop="true"
+            android:padding="6dp"
+            android:src="@drawable/ic_back_vector"
+            android:rotation="90"
+            app:tint="#88FFFFFF"
+            android:clickable="true"
+            android:focusable="true" />
+    </RelativeLayout>
+
     <!-- Add Floating Action Button -->
     <RelativeLayout
         android:id="@+id/addPhotoButton"
@@ -162,6 +322,65 @@
             android:layout_centerInParent="true"
             android:src="@drawable/ic_add_vector"
             app:tint="#00E676"/>
+    </RelativeLayout>
+
+    <!-- Import Progress Modal Overlay -->
+    <RelativeLayout
+        android:id="@+id/layoutImportProgress"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#D0000000"
+        android:clickable="true"
+        android:focusable="true"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_centerInParent="true"
+            android:layout_marginStart="32dp"
+            android:layout_marginEnd="32dp"
+            android:background="@drawable/bg_glass_dialog"
+            android:orientation="vertical"
+            android:padding="24dp">
+
+            <TextView
+                android:id="@+id/tvImportTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Encrypting &amp; Importing..."
+                android:textColor="#FFFFFF"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tvImportSubtitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="Importing file 1 of 1: photo.jpg"
+                android:textColor="#BBBBBB"
+                android:textSize="14sp" />
+
+            <ProgressBar
+                android:id="@+id/importProgressBar"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="8dp"
+                android:layout_marginTop="16dp"
+                android:indeterminate="false"
+                android:max="100"
+                android:progressTint="#00E676" />
+
+            <TextView
+                android:id="@+id/tvImportNotice"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="Encrypting with AES-256-GCM. Please do not close the app."
+                android:textColor="#66FFFFFF"
+                android:textSize="12sp" />
+        </LinearLayout>
     </RelativeLayout>
 
 </RelativeLayout>

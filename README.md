@@ -98,6 +98,15 @@ A next-generation privacy tool disguised as a fully functional, high-fidelity **
 ### 7. Asymmetric Hybrid Intruder Camera (Camera2)
 - **Asymmetric Hybrid Crypto:** An RSA-2048 public key encrypts an ephemeral AES-256-GCM key for each photo capture. The camera service securely encrypts intruder photos while the vault is locked without needing the master key in RAM.
 - **Silent & Uncoerced:** Zero screen flash, zero camera shutter sound, zero permission prompts during unlock attempts.
+
+### 8. Hardened Media Gallery & Safe Storage Pipeline (Phase 4)
+- **Multi-Select System Import:** Uses modern Photo Picker (`PickMultipleVisualMedia`) and `OpenMultipleDocuments` with progress tracking.
+- **Atomic Encryption Verification:** Each imported file is verified (size and SHA-256 checksum) before original deletion is requested. Same-name files are isolated via unique UUIDs.
+- **Truthful Original Deletion:** Uses `MediaStore.createDeleteRequest` on Android 11+ and direct removal on older OS. Accurately reports whether originals were purged or retained.
+- **Verified MediaStore Restoration:** Restores files through scoped MediaStore collections (Pictures, Movies, Music, Downloads) with `IS_PENDING = 1`. Deletes vault copy only after disk verification; rolls back on write errors.
+- **Safe Photo Editing:** Atomic saves with user choice ("Save Copy" vs "Replace Original"), format preservation (PNG/WEBP/JPEG), and EXIF orientation normalization.
+- **Responsive ListAdapter & DiffUtil:** Replaced manual uncancelled scopes with `lifecycleScope` and eliminated full-adapter rebuilds.
+- **Full Audio Playback:** Inline and fullscreen audio player powered by Media3 ExoPlayer with automatic audio focus handling and seek support.
 - **Cap & Audit Trail:** Enforces a 50-photo storage cap and maintains a persistent audit log (`intruder_audit.json`).
 
 ### 8. Auto-Lock & Recents Exemption

@@ -1,11 +1,10 @@
 package com.my.seekapplication
 
-import android.content.Intent
+import android.app.AlertDialog
 import android.graphics.Bitmap
-import android.graphics.Color
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
-import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -20,9 +19,11 @@ import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
-import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.lifecycle.lifecycleScope
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.datasource.DefaultDataSource
@@ -32,14 +33,16 @@ import androidx.media3.ui.PlayerView
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
 import com.my.seekapplication.crypto.VaultCipherStream
+import com.my.seekapplication.data.MediaTypeHelper
+import com.my.seekapplication.data.VaultItem
+import com.my.seekapplication.data.VaultRestoreManager
 import com.my.seekapplication.data.VaultSession
 import com.my.seekapplication.player.EncryptedVaultDataSource
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.util.ArrayList
 import java.util.Locale
@@ -47,10 +50,14 @@ import java.util.Locale
 /**
  * MediaViewerActivity: Fullscreen in-memory media viewer with Media3 ExoPlayer.
  *
- * Guarantees:
- * 1. ZERO plaintext files on disk for video, audio, and photo viewing.
- * 2. In-memory AES-256-GCM chunk streaming with seek support via EncryptedVaultDataSource.
- * 3. Android 16 Edge-to-Edge with notch / cutout protection.
+ * Implements:
+ * 1. Safe photo editing: atomic write with choice "Save Copy" or "Replace Original".
+ * 2. Format preservation (PNG, WEBP, JPEG) and EXIF orientation handling.
+ * 3. Media type classification via stored MIME type (MediaTypeHelper).
+ * 4. Audio focus management, rewind/forward 10s, and full audio playback controls.
+ * 5. MediaStore-based restoration with rollback verification.
+ * 6. Direct vault deletion with confirmation dialog.
+ * 7. Automatic job cleanup via lifecycleScope.
  */
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class MediaViewerActivity : BaseVaultActivity() {
@@ -68,12 +75,10 @@ class MediaViewerActivity : BaseVaultActivity() {
     private var mimeTypes: ArrayList<String>? = null
 
     private lateinit var adapter: MediaPagerAdapter
-    private val viewerScope = CoroutineScope(Dispatchers.Main + Job())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // FLAG_SECURE prevents screenshots and screen recording
         window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
         supportActionBar?.hide()
         enableEdgeToEdge()
@@ -87,8 +92,8 @@ class MediaViewerActivity : BaseVaultActivity() {
         tvMediaCounter = findViewById(R.id.tvMediaCounter)
         val btnBack = findViewById<ImageView>(R.id.btnBack)
         val btnRestoreViewer = findViewById<ImageView>(R.id.btnRestoreViewer)
+        val btnDeleteViewer = findViewById<ImageView>(R.id.btnDeleteViewer)
 
-        // Android 16 Window Insets: avoid edge-to-edge overlaps & squishing
         ViewCompat.setOnApplyWindowInsetsListener(rootMediaViewer) { _, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
             val density = resources.displayMetrics.density
@@ -128,6 +133,7 @@ class MediaViewerActivity : BaseVaultActivity() {
 
         btnBack.setOnClickListener { finish() }
         btnRestoreViewer.setOnClickListener { restoreCurrentMedia() }
+        btnDeleteViewer.setOnClickListener { deleteCurrentMedia() }
 
         // Setup photo editing buttons
         findViewById<View>(R.id.btnRotate)?.setOnClickListener {
@@ -147,7 +153,7 @@ class MediaViewerActivity : BaseVaultActivity() {
         }
 
         findViewById<View>(R.id.btnSaveEdit)?.setOnClickListener {
-            saveEditedPhoto()
+            promptSaveEditedPhoto()
         }
     }
 
@@ -157,13 +163,27 @@ class MediaViewerActivity : BaseVaultActivity() {
         return recyclerView.findViewHolderForAdapterPosition(currentPos) as? MediaPagerAdapter.MediaViewHolder
     }
 
-    private fun saveEditedPhoto() {
+    private fun promptSaveEditedPhoto() {
         val holder = getCurrentViewHolder() ?: return
         val editedBitmap = holder.imageView.createEditedBitmap() ?: run {
             Toast.makeText(this, "No changes to save.", Toast.LENGTH_SHORT).show()
             return
         }
 
+        AlertDialog.Builder(this)
+            .setTitle("Save Edited Photo")
+            .setMessage("Do you want to replace the original photo in the vault or save it as a new copy?")
+            .setPositiveButton("Save Copy") { _, _ ->
+                saveEditedPhotoInternal(editedBitmap, replaceOriginal = false)
+            }
+            .setNeutralButton("Replace Original") { _, _ ->
+                saveEditedPhotoInternal(editedBitmap, replaceOriginal = true)
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun saveEditedPhotoInternal(editedBitmap: Bitmap, replaceOriginal: Boolean) {
         val currentPos = viewPager.currentItem
         if (currentPos !in filePaths.indices) return
 
@@ -180,25 +200,69 @@ class MediaViewerActivity : BaseVaultActivity() {
             return
         }
 
-        Toast.makeText(this, "Saving edited photo...", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "Saving photo...", Toast.LENGTH_SHORT).show()
 
-        viewerScope.launch {
+        lifecycleScope.launch {
             val success = withContext(Dispatchers.IO) {
+                var tempFile: File? = null
                 try {
-                    val baos = java.io.ByteArrayOutputStream()
-                    editedBitmap.compress(Bitmap.CompressFormat.JPEG, 95, baos)
-                    java.io.ByteArrayInputStream(baos.toByteArray()).use { bais ->
-                        repo.updateItemContent(item, bais)
+                    // Determine compression format matching original mime type
+                    val mimeLower = item.mimeType.lowercase()
+                    val (format, quality) = when {
+                        mimeLower.contains("png") -> Bitmap.CompressFormat.PNG to 100
+                        mimeLower.contains("webp") -> {
+                            val webpFormat = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                Bitmap.CompressFormat.WEBP_LOSSY
+                            } else {
+                                @Suppress("DEPRECATION")
+                                Bitmap.CompressFormat.WEBP
+                            }
+                            webpFormat to 92
+                        }
+                        else -> Bitmap.CompressFormat.JPEG to 92
+                    }
+
+                    tempFile = File.createTempFile("edit_", ".tmp", cacheDir)
+                    FileOutputStream(tempFile).use { fos ->
+                        editedBitmap.compress(format, quality, fos)
+                        fos.flush()
+                    }
+
+                    if (replaceOriginal) {
+                        FileInputStream(tempFile).use { fis ->
+                            repo.updateItemContent(item, fis)
+                        }
+                    } else {
+                        val base = item.originalName.substringBeforeLast('.')
+                        val ext = item.originalName.substringAfterLast('.', "jpg")
+                        val newName = "${base}_edited.$ext"
+                        val newItem = FileInputStream(tempFile).use { fis ->
+                            repo.importStream(fis, newName, "Photos", item.mimeType)
+                        }
+
+                        withContext(Dispatchers.Main) {
+                            filePaths.add(currentPos + 1, repo.getFileForItem(newItem).absolutePath)
+                            fileNames?.add(currentPos + 1, newItem.originalName)
+                            itemIds?.add(currentPos + 1, newItem.id)
+                            mimeTypes?.add(currentPos + 1, newItem.mimeType)
+                            adapter.notifyItemInserted(currentPos + 1)
+                            viewPager.setCurrentItem(currentPos + 1, true)
+                        }
                     }
                     true
                 } catch (e: Exception) {
                     Log.e(tag, "Failed saving edited photo: ${e.message}", e)
                     false
+                } finally {
+                    tempFile?.delete()
                 }
             }
 
             if (success) {
-                Toast.makeText(this@MediaViewerActivity, "Photo saved to vault!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@MediaViewerActivity, if (replaceOriginal) "Original replaced in vault!" else "Saved as copy in vault!", Toast.LENGTH_SHORT).show()
+                if (replaceOriginal) {
+                    adapter.notifyItemChanged(currentPos)
+                }
             } else {
                 Toast.makeText(this@MediaViewerActivity, "Failed to save photo.", Toast.LENGTH_SHORT).show()
             }
@@ -213,85 +277,98 @@ class MediaViewerActivity : BaseVaultActivity() {
         if (position !in filePaths.indices) return
         val path = filePaths[position]
         val name = fileNames?.getOrNull(position) ?: File(path).name
-        val isVideoOrAudio = isVideoOrAudio(name)
+        val mime = mimeTypes?.getOrNull(position)
 
-        layoutPhotoEditing.visibility = if (isVideoOrAudio) View.GONE else View.VISIBLE
-    }
-
-    private fun isVideoOrAudio(name: String): Boolean {
-        val lower = name.lowercase().removeSuffix(".enc")
-        return lower.endsWith(".mp4") || lower.endsWith(".mkv") || lower.endsWith(".3gp") ||
-                lower.endsWith(".mp3") || lower.endsWith(".wav") || lower.endsWith(".m4a")
+        val isImage = MediaTypeHelper.isImage(mime, name)
+        layoutPhotoEditing.visibility = if (isImage) View.VISIBLE else View.GONE
     }
 
     private fun restoreCurrentMedia() {
         val currentPos = viewPager.currentItem
         if (currentPos !in filePaths.indices) return
 
-        val path = filePaths[currentPos]
-        val file = File(path)
-        val repo = VaultSession.getRepositoryOrNull()
-        val originalName = fileNames?.getOrNull(currentPos) ?: file.name.removeSuffix(".enc")
-        val itemId = itemIds?.getOrNull(currentPos)
+        val repo = VaultSession.getRepositoryOrNull() ?: run {
+            Toast.makeText(this, "Vault session expired.", Toast.LENGTH_SHORT).show()
+            finish()
+            return
+        }
 
-        Toast.makeText(this, "Restoring file...", Toast.LENGTH_SHORT).show()
+        val filePath = filePaths[currentPos]
+        val file = File(filePath)
+        val itemId = itemIds?.getOrNull(currentPos) ?: file.name.removeSuffix(".enc")
+        val item = repo.getItemById(itemId) ?: run {
+            Toast.makeText(this, "Item not found in vault.", Toast.LENGTH_SHORT).show()
+            return
+        }
 
-        viewerScope.launch {
-            val success = withContext(Dispatchers.IO) {
-                try {
-                    val publicDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-                    val restoreFolder = File(publicDir, "Vault_Restored")
-                    if (!restoreFolder.exists()) restoreFolder.mkdirs()
+        Toast.makeText(this, "Restoring ${item.originalName}...", Toast.LENGTH_SHORT).show()
 
-                    val restoredFile = File(restoreFolder, originalName)
-                    FileOutputStream(restoredFile).use { fos ->
-                        if (repo != null && file.name.endsWith(".enc")) {
-                            val item = itemId?.let { repo.getItemById(it) }
-                            if (item != null) {
-                                repo.exportItemToStream(item, fos)
-                            } else {
-                                VaultCipherStream().getDecryptedStream(file, repo.masterKey).use { input ->
-                                    input.copyTo(fos)
-                                }
-                            }
-                        } else {
-                            file.copyTo(restoredFile, overwrite = true)
-                        }
-                    }
-
-                    if (repo != null && itemId != null) {
-                        repo.deleteItem(itemId)
-                    } else {
-                        file.delete()
-                    }
-                    true
-                } catch (e: Exception) {
-                    Log.e(tag, "Failed to restore: ${e.message}", e)
-                    false
-                }
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                VaultRestoreManager.restoreItem(this@MediaViewerActivity, repo, item)
             }
 
-            if (success) {
-                Toast.makeText(this@MediaViewerActivity, "Restored Successfully to Downloads/Vault_Restored!", Toast.LENGTH_SHORT).show()
-                if (currentPos in filePaths.indices) {
-                    filePaths.removeAt(currentPos)
-                    fileNames?.removeAt(currentPos)
-                    itemIds?.removeAt(currentPos)
-                    mimeTypes?.removeAt(currentPos)
-                    adapter.notifyItemRemoved(currentPos)
-                    adapter.notifyItemRangeChanged(currentPos, filePaths.size)
-                }
-
-                if (filePaths.isEmpty()) {
-                    finish()
-                } else {
-                    val newPos = currentPos.coerceAtMost(filePaths.size - 1)
-                    updateCounter(newPos)
-                    updateToolbarVisibility(newPos)
-                }
+            if (result.success) {
+                Toast.makeText(this@MediaViewerActivity, "Restored ${item.originalName} to public gallery!", Toast.LENGTH_LONG).show()
+                removeItemAt(currentPos)
             } else {
-                Toast.makeText(this@MediaViewerActivity, "Restore Failed!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@MediaViewerActivity, "Restore failed: ${result.error}", Toast.LENGTH_LONG).show()
             }
+        }
+    }
+
+    private fun deleteCurrentMedia() {
+        val currentPos = viewPager.currentItem
+        if (currentPos !in filePaths.indices) return
+
+        val repo = VaultSession.getRepositoryOrNull() ?: run {
+            Toast.makeText(this, "Vault session expired.", Toast.LENGTH_SHORT).show()
+            finish()
+            return
+        }
+
+        val filePath = filePaths[currentPos]
+        val file = File(filePath)
+        val itemId = itemIds?.getOrNull(currentPos) ?: file.name.removeSuffix(".enc")
+        val name = fileNames?.getOrNull(currentPos) ?: file.name
+
+        AlertDialog.Builder(this)
+            .setTitle("Delete Permanently?")
+            .setMessage("Are you sure you want to permanently delete \"$name\" from the vault? This cannot be undone.")
+            .setPositiveButton("Delete") { _, _ ->
+                lifecycleScope.launch {
+                    val deleted = withContext(Dispatchers.IO) {
+                        repo.deleteItem(itemId)
+                    }
+                    if (deleted) {
+                        Toast.makeText(this@MediaViewerActivity, "File deleted.", Toast.LENGTH_SHORT).show()
+                        removeItemAt(currentPos)
+                    } else {
+                        Toast.makeText(this@MediaViewerActivity, "Failed to delete file.", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun removeItemAt(pos: Int) {
+        if (pos in filePaths.indices) {
+            filePaths.removeAt(pos)
+            fileNames?.removeAt(pos)
+            itemIds?.removeAt(pos)
+            mimeTypes?.removeAt(pos)
+            adapter.notifyItemRemoved(pos)
+            adapter.notifyItemRangeChanged(pos, filePaths.size)
+        }
+
+        if (filePaths.isEmpty()) {
+            finish()
+        } else {
+            val newPos = pos.coerceAtMost(filePaths.size - 1)
+            viewPager.setCurrentItem(newPos, false)
+            updateCounter(newPos)
+            updateToolbarVisibility(newPos)
         }
     }
 
@@ -307,6 +384,8 @@ class MediaViewerActivity : BaseVaultActivity() {
             val playerView: PlayerView = view.findViewById(R.id.viewerPlayerView)
             val videoTouchOverlay: View = view.findViewById(R.id.videoTouchOverlay)
             val videoControlsLayout: RelativeLayout = view.findViewById(R.id.videoControlsLayout)
+            val layoutAudioInfo: LinearLayout = view.findViewById(R.id.layoutAudioInfo)
+            val tvAudioViewerTitle: TextView = view.findViewById(R.id.tvAudioViewerTitle)
             val btnPlayPause: ImageView = view.findViewById(R.id.btnVideoPlayPause)
             val btnRewind10: ImageView = view.findViewById(R.id.btnRewind10)
             val btnForward10: ImageView = view.findViewById(R.id.btnForward10)
@@ -315,7 +394,6 @@ class MediaViewerActivity : BaseVaultActivity() {
             val tvTotalTime: TextView = view.findViewById(R.id.tvVideoTotalTime)
 
             var exoPlayer: ExoPlayer? = null
-            var currentJob: Job? = null
             val handler = Handler(Looper.getMainLooper())
 
             val progressUpdateRunnable: Runnable = object : Runnable {
@@ -348,23 +426,39 @@ class MediaViewerActivity : BaseVaultActivity() {
         }
 
         override fun onBindViewHolder(holder: MediaViewHolder, position: Int) {
-            holder.currentJob?.cancel()
             holder.releasePlayer()
 
             val path = paths[position]
             val file = File(path)
             val name = fileNames?.getOrNull(position) ?: file.name
-            val isMedia = isVideoOrAudio(name)
+            val mime = mimeTypes?.getOrNull(position)
 
-            if (isMedia) {
+            val isVideo = MediaTypeHelper.isVideo(mime, name)
+            val isAudio = MediaTypeHelper.isAudio(mime, name)
+
+            if (isVideo || isAudio) {
                 holder.imageView.visibility = View.GONE
                 holder.playerView.visibility = View.VISIBLE
                 holder.videoTouchOverlay.visibility = View.VISIBLE
                 holder.videoControlsLayout.visibility = View.VISIBLE
 
-                val player = ExoPlayer.Builder(this@MediaViewerActivity).build().apply {
-                    repeatMode = Player.REPEAT_MODE_ALL
+                if (isAudio) {
+                    holder.layoutAudioInfo.visibility = View.VISIBLE
+                    holder.tvAudioViewerTitle.text = name
+                } else {
+                    holder.layoutAudioInfo.visibility = View.GONE
                 }
+
+                val audioAttributes = AudioAttributes.Builder()
+                    .setUsage(C.USAGE_MEDIA)
+                    .setContentType(if (isAudio) C.AUDIO_CONTENT_TYPE_MUSIC else C.AUDIO_CONTENT_TYPE_MOVIE)
+                    .build()
+
+                val player = ExoPlayer.Builder(this@MediaViewerActivity)
+                    .setAudioAttributes(audioAttributes, /* handleAudioFocus = */ true)
+                    .build().apply {
+                        repeatMode = Player.REPEAT_MODE_ALL
+                    }
                 holder.exoPlayer = player
                 holder.playerView.player = player
 
@@ -441,9 +535,10 @@ class MediaViewerActivity : BaseVaultActivity() {
                 holder.playerView.visibility = View.GONE
                 holder.videoTouchOverlay.visibility = View.GONE
                 holder.videoControlsLayout.visibility = View.GONE
+                holder.layoutAudioInfo.visibility = View.GONE
                 holder.imageView.visibility = View.VISIBLE
 
-                holder.currentJob = viewerScope.launch {
+                lifecycleScope.launch {
                     val bitmap = withContext(Dispatchers.IO) {
                         val dm = resources.displayMetrics
                         VaultImageLoader.decodeImageBitmap(file, dm.widthPixels, dm.heightPixels)
@@ -457,7 +552,6 @@ class MediaViewerActivity : BaseVaultActivity() {
 
         override fun onViewRecycled(holder: MediaViewHolder) {
             super.onViewRecycled(holder)
-            holder.currentJob?.cancel()
             holder.releasePlayer()
         }
 
