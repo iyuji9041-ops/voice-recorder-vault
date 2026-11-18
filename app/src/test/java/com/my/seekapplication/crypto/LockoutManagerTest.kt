@@ -19,10 +19,10 @@ class LockoutManagerTest {
 
     private class TestClock(
         var elapsed: Long = 100_000L,
-        var bootCount: Int = 1
+        var currentBootCount: Int = 1
     ) : LockoutManager.Clock {
         override fun elapsedRealtime(): Long = elapsed
-        override fun getBootCount(): Int = bootCount
+        override fun getBootCount(): Int = currentBootCount
     }
 
     private class TestSharedPreferences : SharedPreferences {
@@ -166,7 +166,7 @@ class LockoutManagerTest {
         assertEquals(20_000L, lockoutManager.getRemainingLockoutMs(target))
 
         // Simulate reboot: elapsedRealtime resets to near 0, boot count increments
-        testClock.bootCount += 1
+        testClock.currentBootCount += 1
         testClock.elapsed = 500L
 
         // Lockout must not be bypassed by rebooting!
