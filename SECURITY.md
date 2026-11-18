@@ -182,3 +182,27 @@ Failed authentication attempts trigger silent background photograph capture usin
 - **Atomic Photo Editing:** Offers choice of "Save Copy" vs "Replace Original". Preserves input formats (PNG, WEBP, JPEG), prevents OutOfMemory errors via downsampling, and respects EXIF orientation metadata.
 - **Lifecycle Scopes:** Replaced manual CoroutineScopes with `lifecycleScope` to prevent leaked background jobs upon activity destruction.
 - **Stored MIME Classification (`MediaTypeHelper`):** Relies on encrypted index MIME types rather than fragile filename extensions to classify media.
+
+---
+
+## 11. Known Limitations & Operational Boundaries
+
+Every security system has explicit physical and cryptographic boundaries. The following known limitations are documented honestly:
+
+1. **Rooted Devices & Kernel Exploits:**
+   If the host Android operating system is compromised (e.g., rooted device, compromised bootloader, or malicious kernel module), an adversary with superuser permissions can inspect volatile process RAM while the vault is unlocked, intercept decrypted buffers, or directly access hardware keystore interfaces. The app relies on Android's Linux UID sandbox on unrooted, certified devices.
+
+2. **Forgotten Credentials with Lost Recovery Code:**
+   The application incorporates zero master bypass backdoors, zero developer recovery keys, and zero cloud escrow. If you forget your Vault PIN/Password and have lost your 16-character offline recovery code, your data is mathematically impossible to recover or decrypt. In this scenario, the only available action is a destructive factory reset that purges the vault.
+
+3. **Android Sandbox Eradication ("Clear Data" & Uninstallation):**
+   Vault files and keys are kept strictly within `/data/data/com.my.seekapplication/files/`. When a user selects "Clear Data" in Android System Settings or uninstalls the app, Android permanently erases the internal application sandbox. Without an exported `.svb` Encrypted Backup, data cannot be recovered.
+
+4. **Forensic APK Inspection:**
+   The covert secret hold on the Voice Recorder button provides plausible deniability during casual or visual inspections. However, an attacker with physical USB debugging access or root privileges can extract the APK, inspect package resources (`com.my.seekapplication`), and disassemble classes to confirm the presence of vault code. While ciphertext remains cryptographically secure under AES-256-GCM, the existence of vault code cannot be concealed from forensic binary decompilation.
+
+5. **Public Voice Recordings Exposure:**
+   Audio files recorded in the decoy voice recorder are stored in public MediaStore storage (`Recordings/MyVoiceRecordings`). These files are deliberately not encrypted so that standard media players, file managers, and sharing tools on the device can access them normally. Sensitive personal media should be imported into the encrypted vault, not left in the public voice recorder.
+
+6. **Clipboard Exposure on Older OS Versions:**
+   When copying the 16-character offline recovery code to the system clipboard, other apps with clipboard read permissions on Android 12 and older could potentially observe the token. Users are urged to transcribe the code on physical paper rather than keeping it in clipboard memory.

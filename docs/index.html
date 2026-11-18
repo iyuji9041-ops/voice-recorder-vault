@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Privacy Policy - Voice Recorder & Secure Vault</title>
+    <title>Privacy Policy - Voice Recorder &amp; Secure Vault</title>
     <style>
         :root {
             --bg-primary: #0A0A0A;
@@ -13,6 +13,8 @@
             --text-primary: #FFFFFF;
             --text-secondary: #AAAAAA;
             --border-color: #262626;
+            --warning-border: #FF5252;
+            --warning-bg: rgba(255, 82, 82, 0.1);
         }
         * {
             box-sizing: border-box;
@@ -27,7 +29,7 @@
             padding: 24px 16px;
         }
         .container {
-            max-width: 800px;
+            max-width: 820px;
             margin: 0 auto;
             background: var(--bg-card);
             border: 1px solid var(--border-color);
@@ -66,6 +68,13 @@
             border-bottom: 1px solid var(--border-color);
             padding-bottom: 6px;
         }
+        h3 {
+            font-size: 16px;
+            font-weight: 600;
+            color: #FFFFFF;
+            margin-top: 16px;
+            margin-bottom: 8px;
+        }
         p {
             font-size: 15px;
             color: #DDDDDD;
@@ -92,6 +101,31 @@
             font-size: 14px;
             color: #E0E0E0;
         }
+        .warning-box {
+            background: var(--warning-bg);
+            border-left: 4px solid var(--warning-border);
+            padding: 16px;
+            border-radius: 6px;
+            margin: 20px 0;
+            font-size: 14px;
+            color: #FFCDD2;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 14px;
+        }
+        th, td {
+            border: 1px solid var(--border-color);
+            padding: 10px 12px;
+            text-align: left;
+        }
+        th {
+            background-color: #1F1F1F;
+            color: var(--accent-green);
+            font-weight: 600;
+        }
         footer {
             margin-top: 40px;
             text-align: center;
@@ -104,57 +138,94 @@
 </head>
 <body>
     <div class="container">
-        <span class="badge">OFFLINE PRIVACY GUARANTEE</span>
+        <span class="badge">100% OFFLINE ZERO DATA COLLECTION</span>
         <h1>Privacy Policy</h1>
-        <div class="last-updated">Last Updated: October 2026 | Effective Date: Immediate</div>
+        <div class="last-updated">Effective Date: November 2026 | Version: 1.0.0</div>
 
         <div class="highlight-box">
-            <strong>Key Summary:</strong> Voice Recorder & Secure Vault is an <em>100% offline application</em>. We do not operate external tracking servers, do not require accounts, and never upload, collect, or transmit any audio recordings, photos, videos, or personal data over the internet.
+            <strong>Key Summary:</strong> Voice Recorder &amp; Secure Vault operates entirely offline. The application does not collect, transmit, track, or share any personal data, audio recordings, or media files. All encryption and processing occur strictly on your physical device.
         </div>
 
-        <h2>1. Zero Data Collection & Offline Architecture</h2>
-        <p>Your privacy is the foundational premise of our application:</p>
+        <h2>1. Zero Network Connectivity &amp; Zero Data Collection</h2>
+        <p>Your privacy is guaranteed by architecture and technical constraints:</p>
         <ul>
-            <li><strong>No Internet Permission:</strong> The application does not request or possess the <code>android.permission.INTERNET</code> permission in its core functionality. It is fundamentally incapable of communicating with cloud servers or third parties.</li>
-            <li><strong>No Analytics or Trackers:</strong> No advertising SDKs, tracking libraries (such as Google Analytics or Firebase), or diagnostic telemetry are bundled within the app.</li>
-            <li><strong>No Accounts or Registration:</strong> You do not need an email, phone number, or login account to utilize any feature.</li>
+            <li><strong>No Internet Permission:</strong> The application does not declare <code>android.permission.INTERNET</code> in its manifest. It cannot establish network connections or transmit data.</li>
+            <li><strong>No Tracking or Telemetry:</strong> Contains zero third-party advertising, analytics, or tracking SDKs.</li>
+            <li><strong>No User Accounts:</strong> Does not require or support registration, accounts, or cloud logins.</li>
         </ul>
 
-        <h2>2. Military-Grade On-Device Encryption</h2>
-        <p>All sensitive vault files are encrypted and decrypted strictly locally on your physical hardware:</p>
+        <h2>2. Data Storage Locations &amp; Encryption Architecture</h2>
+        <h3>Public Voice Recordings</h3>
+        <p>Voice recordings created in the decoy voice recorder are stored locally on your device in standard audio storage (<code>Recordings/MyVoiceRecordings</code>) and are accessible through file managers and media apps.</p>
+
+        <h3>Encrypted Vault Files</h3>
+        <p>Files hidden in the vault (photos, videos, audio notes) are stored in the application's private internal sandbox (<code>/data/data/com.my.seekapplication/files/vault/</code>). Files are encrypted with chunked <strong>AES-256-GCM</strong> (64 KB blocks, 128-bit authentication tag, Associated Authenticated Data binding) under random UUID filenames.</p>
+
+        <h3>Intruder Photographs</h3>
+        <p>Front-camera photos taken during unauthorized unlock attempts are stored in the private sandbox (<code>files/intruder_selfies/</code>) and encrypted asymmetrically via <strong>RSA-2048 hybrid AES-256-GCM</strong>. They can only be decrypted after a valid vault unlock.</p>
+
+        <h3>Master Encryption Keys</h3>
+        <p>Master keys are never stored in plaintext on disk. They are protected using dual-factor wrapping: <strong>PBKDF2-HMAC-SHA256 (600,000 iterations)</strong> combined with an Android KeyStore hardware-backed master key (<code>StrongBox</code> / TEE).</p>
+
+        <h2>3. Device Removal, "Clear Data", &amp; Backups</h2>
+        <div class="warning-box">
+            <strong>Important Notice on "Clear Data" and Uninstallation:</strong><br>
+            Vault files and keys reside in Android's private app sandbox. Tapping <strong>"Clear Data"</strong> in Android Settings or <strong>uninstalling the app</strong> causes the operating system to permanently erase this sandbox. To safeguard your data across resets or device switches, export an <strong>Encrypted Backup (.svb)</strong> from Settings.
+        </div>
+        <p>Backups exported in <code>.svb</code> format are standalone AES-256-GCM encrypted archives secured with a user-chosen passphrase that can be restored to any device.</p>
+
+        <h2>4. Requested Permissions &amp; Purposes</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Permission</th>
+                    <th>Purpose</th>
+                    <th>Data Scope</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>RECORD_AUDIO</code></td>
+                    <td>Voice note recording in the decoy interface.</td>
+                    <td>Stored locally on device.</td>
+                </tr>
+                <tr>
+                    <td><code>FOREGROUND_SERVICE</code></td>
+                    <td>Keeps audio recording active when minimized.</td>
+                    <td>Local system service.</td>
+                </tr>
+                <tr>
+                    <td><code>FOREGROUND_SERVICE_MICROPHONE</code></td>
+                    <td>Android 14+ background mic access.</td>
+                    <td>Audio recording only.</td>
+                </tr>
+                <tr>
+                    <td><code>POST_NOTIFICATIONS</code></td>
+                    <td>Notification with pause/resume/save controls.</td>
+                    <td>Local system notification.</td>
+                </tr>
+                <tr>
+                    <td><code>CAMERA</code></td>
+                    <td>Silent front-camera intruder capture on failed PIN.</td>
+                    <td>Encrypted on-device only.</td>
+                </tr>
+                <tr>
+                    <td><code>VIBRATE</code></td>
+                    <td>Haptic tactile feedback on key entry.</td>
+                    <td>Device vibration hardware.</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h2>5. User Data Control</h2>
         <ul>
-            <li><strong>AES-256-GCM Encryption:</strong> Hidden photos, videos, and confidential audio files are encrypted with authenticated AES-256 in Galois/Counter Mode before being written to persistent storage.</li>
-            <li><strong>Cryptographic PBKDF2 Key Derivation:</strong> Passwords, numeric PINs, and touch patterns are never stored in plaintext. They are salted with 16-byte cryptographically secure random salts and hashed using PBKDF2 with HMAC-SHA256 across 10,000 iterations.</li>
-            <li><strong>Anti-Wipe Persistence:</strong> Encrypted blobs reside in local storage, safeguarded with <code>.nomedia</code> flags so other gallery apps cannot index them, and structured to prevent accidental deletion during device cache cleanups.</li>
+            <li><strong>Immediate Deletion:</strong> Deleting a file from the vault removes it immediately and permanently from storage.</li>
+            <li><strong>Restoration:</strong> Any hidden file can be decrypted and restored to public device storage at any time.</li>
+            <li><strong>Vault Wipe:</strong> A complete factory reset option securely purges all encrypted files, indexes, and keys.</li>
         </ul>
-
-        <h2>3. Device Permissions & Purpose</h2>
-        <p>We only request runtime permissions that are strictly necessary for core utility features:</p>
-        <ul>
-            <li><strong>RECORD_AUDIO (Microphone):</strong> Used exclusively to record voice audio when you tap the Record button in the authentic voice recorder decoy interface. Recordings are stored locally on your device storage.</li>
-            <li><strong>READ_EXTERNAL_STORAGE / WRITE_EXTERNAL_STORAGE:</strong> Used to save public audio recordings to your device's <code>Recordings/</code> folder, and to allow you to select media you wish to securely import into the encrypted vault.</li>
-            <li><strong>CAMERA:</strong> Used solely on-device for the optional Intruder Selfie security mechanism. When someone enters an incorrect Door Passcode or Vault Key, the front-facing camera captures a silent photo stored strictly in private app storage. These photos never leave your device.</li>
-        </ul>
-
-        <h2>4. Data Sharing & Third-Party Disclosure</h2>
-        <p>We do not sell, rent, license, or disclose your information to any third parties for any purpose, including marketing, research, or analytics. Any audio sharing you perform via the app's Share button is initiated solely by your explicit user action via Android's native system share sheet (FileProvider).</p>
-
-        <h2>5. Data Retention & User Control</h2>
-        <p>You retain 100% ownership and control over your files:</p>
-        <ul>
-            <li><strong>Deletion:</strong> You can delete any recording, hidden photo, video, or intruder selfie at any moment. Once deleted, the file is immediately removed from disk storage.</li>
-            <li><strong>Unhiding / Export:</strong> You can unhide and restore encrypted media back to your device's standard public gallery anytime.</li>
-            <li><strong>App Uninstallation:</strong> Uninstalling the application will remove local app data. Persistent vault contents remain encrypted on storage until manually removed.</li>
-        </ul>
-
-        <h2>6. Children's Privacy (COPPA & GDPR Compliance)</h2>
-        <p>Because the app does not collect personal data, transmit information, or connect to the internet, it is completely safe and compliant with the Children's Online Privacy Protection Act (COPPA) and General Data Protection Regulation (GDPR).</p>
-
-        <h2>7. Contact & Inquiries</h2>
-        <p>If you have any questions regarding this Privacy Policy or security architecture, you may inspect the open source repository documentation or contact the developer via GitHub: <a href="https://github.com/iyuji9041-ops/voice-recorder-vault" style="color: #6ee7b7; font-weight: 600;">github.com/iyuji9041-ops/voice-recorder-vault</a>.</p>
 
         <footer>
-            &copy; 2026 Voice Recorder & Secure Vault. All rights reserved. Built for security, sovereignty, and privacy.
+            &copy; 2026 Voice Recorder &amp; Secure Vault. All rights reserved.
         </footer>
     </div>
 </body>

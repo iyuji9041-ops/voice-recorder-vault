@@ -4,11 +4,10 @@
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.4.21-blue.svg)](https://kotlinlang.org)
 [![Gradle](https://img.shields.io/badge/Gradle-9.9.1-02303A.svg)](https://gradle.org)
 [![AGP](https://img.shields.io/badge/AGP-9.5.1-34A853.svg)](https://developer.android.com/studio/releases/gradle-plugin)
-[![License](https://img.shields.io/badge/License-MIT-orange.svg)](LICENSE)
 [![Zero Cloud](https://img.shields.io/badge/Cloud%20Data%20Collection-0%25%20(100%25%20Offline)-success.svg)](PRIVACY_POLICY.md)
 [![Security Policy](https://img.shields.io/badge/Security-Hardened%20AES--256--GCM-red.svg)](SECURITY.md)
 
-A next-generation privacy tool disguised as a fully functional, high-fidelity **Voice Recorder**. On the surface, it provides professional-grade audio recording, playback, sharing, and waveform visualization. Beneath the surface lies a military-grade, chunked **AES-256-GCM encrypted vault** for photos, videos, and private notes, secured with dual-factor hardware key wrapping, in-memory zero-disk-leak streaming, an anti-coercion decoy profile, and password-protected offline backups (`.svb`).
+A privacy-focused utility combining a production-grade **Voice Recorder** decoy with a military-grade, chunked **AES-256-GCM encrypted media vault**. On the surface, it provides professional background voice recording via an Android Foreground Service, live dynamic waveform visualization, pause/resume, and public MediaStore audio management. Beneath the surface lies a chunked AES-256-GCM encrypted vault for photos, videos, and audio files, secured with dual-factor hardware key wrapping, in-memory zero-disk-leak streaming, an anti-coercion decoy profile, asymmetric RSA-2048 intruder selfie capture, and password-protected offline backups (`.svb`).
 
 ---
 
@@ -138,44 +137,75 @@ wise-curie/
 │   ├── proguard-rules.pro               # ProGuard / R8 optimization rules
 │   └── src/
 │       ├── main/
-│       │   ├── AndroidManifest.xml      # Manifest (Activities, Zero INTERNET permission)
+│       │   ├── AndroidManifest.xml      # Manifest (Foreground Service, Zero INTERNET)
 │       │   ├── java/com/my/seekapplication/
 │       │   │   ├── VoiceRecorderActivity.kt    # Main Decoy Activity & Audio Engine
 │       │   │   ├── DashboardActivity.kt        # Gateway (Slide-to-unlock & Key Verification)
-│       │   │   ├── VaultGalleryActivity.kt     # Vault Gallery (Photos, Videos, Files)
+│       │   │   ├── VaultGalleryActivity.kt     # Vault Gallery (Photos, Videos, Audios)
 │       │   │   ├── MediaViewerActivity.kt      # Media3 ExoPlayer & Image Viewer
 │       │   │   ├── IntruderListActivity.kt     # Intruder Selfie Gallery & Logs
 │       │   │   ├── SettingsActivity.kt         # Security, Backup Export/Import & Settings
+│       │   │   ├── BaseVaultActivity.kt        # Base Activity with AutoLock receiver
+│       │   │   ├── AutoLockManager.kt          # Lifecycle auto-lock on screen off/background
 │       │   │   ├── PatternLockView.kt          # Custom Canvas 3x3 Pattern Lock View
-│       │   │   ├── IntruderCamera.kt           # Background Front Camera Selfie Engine
+│       │   │   ├── ZoomableImageView.kt        # Multi-touch pinch-to-zoom image viewer
+│       │   │   ├── VaultAdapter.kt             # Async ListAdapter with DiffUtil
+│       │   │   ├── IntruderCamera.kt           # Background Camera2 silent capture engine
 │       │   │   ├── VaultSecurityManager.kt     # Central Security & Auth Facade
 │       │   │   ├── VaultImageLoader.kt         # In-memory streaming photo & thumbnail loader
 │       │   │   ├── crypto/
 │       │   │   │   ├── VaultCipherStream.kt    # Chunked AES-256-GCM streaming cipher
 │       │   │   │   ├── VaultKeyManager.kt      # Dual-factor wrapping & PBKDF2 600k engine
-│       │   │   │   └── SafeBase64.kt           # Dual Android/JVM Base64 wrapper
+│       │   │   │   ├── SafeBase64.kt           # Dual Android/JVM Base64 wrapper
+│       │   │   │   ├── LockoutManager.kt       # Monotonic clock exponential backoff
+│       │   │   │   ├── CredentialPolicy.kt     # Passcode entropy and length validator
+│       │   │   │   ├── IntruderPhotoCrypto.kt  # RSA-2048 hybrid asymmetric photo crypto
+│       │   │   │   └── IntruderAuditLog.kt     # Persistent security audit logging
 │       │   │   ├── data/
 │       │   │   │   ├── VaultRepository.kt      # UUID file manager & encrypted index
 │       │   │   │   ├── VaultSession.kt         # Volatile RAM session & cache eradication
 │       │   │   │   ├── VaultBackupManager.kt   # Encrypted backup export/import (.svb)
-│       │   │   │   └── VaultMigrationHelper.kt # Non-destructive legacy migration
-│       │   │   └── player/
-│       │   │       ├── EncryptedVaultDataSource.kt # Media3 ExoPlayer custom DataSource
-│       │   │       └── EncryptedMediaDataSource.kt # MediaMetadataRetriever DataSource
+│       │   │   │   ├── VaultMigrationHelper.kt # Non-destructive legacy migration
+│       │   │   │   ├── MediaTypeHelper.kt      # Stored MIME type classifier
+│       │   │   │   └── VaultRestoreManager.kt  # Scoped MediaStore verified restoration
+│       │   │   ├── player/
+│       │   │   │   ├── EncryptedVaultDataSource.kt # Media3 ExoPlayer custom DataSource
+│       │   │   │   └── EncryptedMediaDataSource.kt # MediaMetadataRetriever DataSource
+│       │   │   ├── recorder/
+│       │   │   │   ├── AudioStorageManager.kt  # Scoped MediaStore & legacy public audio manager
+│       │   │   │   ├── VoiceRecordingService.kt# Foreground recording service with mic type
+│       │   │   │   └── WaveformView.kt         # Dynamic real-time sound amplitude visualizer
+│       │   │   └── setup/
+│       │   │       ├── SetupWizardActivity.kt  # First-run onboarding wizard
+│       │   │       └── SetupWizardManager.kt   # Setup state & recovery code manager
 │       │   └── res/                             # Layouts, vector drawables & values
 │       └── test/                                # JUnit 4 Unit Tests
 │           └── java/com/my/seekapplication/
 │               ├── crypto/
 │               │   ├── VaultCipherStreamTest.kt # Round trip, seeking, tampering tests
-│               │   └── VaultKeyManagerTest.kt   # Wrapping, decoy isolation, wrong PIN tests
-│               └── data/
-│                   └── VaultMigrationTest.kt    # Legacy decryption & migration tests
+│               │   ├── VaultKeyManagerTest.kt   # Wrapping, decoy isolation, wrong PIN tests
+│               │   ├── SafeBase64Test.kt        # Base64 encoding/decoding tests
+│               │   ├── CredentialPolicyTest.kt  # PIN/Password policy validation tests
+│               │   ├── LockoutManagerTest.kt    # Hardware backoff & reboot survival tests
+│               │   └── IntruderPhotoCryptoTest.kt# Asymmetric RSA-2048 hybrid crypto tests
+│               ├── data/
+│               │   ├── VaultMigrationTest.kt    # Legacy decryption & migration tests
+│               │   ├── MediaTypeHelperTest.kt   # MIME classification tests
+│               │   └── VaultRepositoryTest.kt   # Repository CRUD & atomic write tests
+│               ├── recorder/
+│               │   ├── AudioStorageManagerTest.kt # Audio naming & formatting tests
+│               │   └── VoiceRecordingTimerLogicTest.kt # Non-drifting elapsed time tests
+│               └── setup/
+│                   └── SetupWizardTest.kt       # Setup completion & recovery tests
 ├── gradle/
 │   └── libs.versions.toml                       # Gradle Version Catalog
 ├── .github/workflows/
 │   └── build.yml                                # GitHub Actions CI (test, build, lint)
-├── SECURITY.md                                  # Comprehensive Threat Model & Crypto Spec
+├── SECURITY.md                                  # Threat Model, Cryptographic Spec & Limitations
 ├── PRIVACY_POLICY.md                            # 100% Offline Zero-Data Policy
+├── STORE_LISTING.md                             # Google Play Store Listing & Disclosures
+├── RELEASE_CHECKLIST.md                         # Release signing and validation checklist
+├── CHANGELOG.md                                 # Version history & release notes
 └── README.md                                    # This document
 ```
 
@@ -234,10 +264,4 @@ The release APK is generated at `app/build/outputs/apk/release/app-release.apk`.
 
 ## Security Policy
 
-For security vulnerability disclosures, threat model details, and cryptographic specs, see [SECURITY.md](SECURITY.md).
-
----
-
-## License
-
-Distributed under the MIT License. See `LICENSE` for details.
+For security vulnerability disclosures, threat model details, known limitations, and cryptographic specs, see [SECURITY.md](SECURITY.md).
