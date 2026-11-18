@@ -80,9 +80,30 @@ A next-generation privacy tool disguised as a fully functional, high-fidelity **
 - **Opaque UUID Naming:** Files are renamed to random UUIDs (`<uuid>.enc`), with original metadata kept in an encrypted index.
 - **Atomic Writes:** File imports write to temporary `.tmp_*.enc` files and atomically rename them upon successful encryption, preventing corruption during low-battery or process termination.
 
-### 4. Plausible Deniability & Decoy Vault
-- **Anti-Coercion Mode:** Setting a secondary Fake PIN creates a completely isolated Decoy Vault (`files/vault/decoy/`) with an independent master key.
+### 4. Plausible Deniability & Decoy Vault Parity
+- **Anti-Coercion Mode:** Setting a secondary Decoy Key opens an independent Decoy Vault (`files/vault/decoy/`) with an independent master key.
+- **Full Functional Parity:** Decoy mode allows file addition, encryption, viewing, and deletion identically into the decoy repository without any "Fake Vault" toast or visual leak.
 - **Constant-Time Verification:** Unlock evaluation performs identical symmetric PBKDF2 work regardless of which PIN is entered, eliminating timing side channels.
+
+### 5. Persistent Brute-Force Lockout (LockoutManager)
+- **Monotonic Hardware Clock:** Hardware monotonic clock (`SystemClock.elapsedRealtime`) combined with device boot count (`BOOT_COUNT`) enforces persistent exponential backoff delays (30s, 1m, 5m, 15m).
+- **Anti-Reboot & Anti-Clock-Shift:** Changing the device clock or rebooting the phone does not reset the lockout duration.
+- **Independent Protection Layers:** Door Passcode, Vault Key, and Recovery Token have isolated lockout counters.
+
+### 6. Offline Recovery Architecture (Zero Insecure Bypass)
+- **16-Character Master Recovery Code:** Generates an offline token (`XXXX-XXXX-XXXX-XXXX`) wrapping the Real Master Key into an offline slot.
+- **Zero Question Bypass:** Eliminated insecure bypasses; recovery code is required to unwrap master key offline.
+- **Destructive Vault Wipe:** Provides a safe factory reset option if the recovery code is permanently lost.
+
+### 7. Asymmetric Hybrid Intruder Camera (Camera2)
+- **Asymmetric Hybrid Crypto:** An RSA-2048 public key encrypts an ephemeral AES-256-GCM key for each photo capture. The camera service securely encrypts intruder photos while the vault is locked without needing the master key in RAM.
+- **Silent & Uncoerced:** Zero screen flash, zero camera shutter sound, zero permission prompts during unlock attempts.
+- **Cap & Audit Trail:** Enforces a 50-photo storage cap and maintains a persistent audit log (`intruder_audit.json`).
+
+### 8. Auto-Lock & Recents Exemption
+- **Automated RAM Wipe:** Zeroizes master keys and finishes vault activities on backgrounding or screen turn-off (`ACTION_SCREEN_OFF`).
+- **Configurable Grace Period:** Immediate, 15s, 30s, 1m, or 5m grace period.
+- **Recents Exemption:** `android:excludeFromRecents="true"` and `FLAG_SECURE` prevent OS preview screenshots.
 
 ### 5. In-Memory Zero-Disk-Leak Media Streaming
 - **Media3 ExoPlayer:** Custom `EncryptedVaultDataSource` decrypts directly into memory buffers on demand, eliminating insecure temporary decrypted files in `cacheDir`.

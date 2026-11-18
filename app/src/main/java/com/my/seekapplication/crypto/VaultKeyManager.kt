@@ -39,7 +39,22 @@ class VaultKeyManager(
         const val KEYSTORE_ALIAS = "SecureVaultHardwareMasterKey_v2"
         const val AUTH_CONFIG_FILE = "vault_meta/auth.json"
 
+        private const val RECOVERY_CHARS = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
         private val secureRandom = SecureRandom()
+
+        fun generateRecoveryCode(): String {
+            val sb = StringBuilder()
+            for (i in 0 until 16) {
+                if (i > 0 && i % 4 == 0) sb.append("-")
+                val idx = secureRandom.nextInt(RECOVERY_CHARS.length)
+                sb.append(RECOVERY_CHARS[idx])
+            }
+            return sb.toString()
+        }
+
+        fun normalizeRecoveryCode(code: String): String {
+            return code.replace("-", "").replace(" ", "").trim().uppercase(java.util.Locale.US)
+        }
     }
 
     interface KeystoreKeyProvider {
@@ -149,6 +164,12 @@ class VaultKeyManager(
         val ciphertext: ByteArray
     )
 
+    data class RecoverySlotData(
+        val salt: ByteArray,
+        val iv: ByteArray,
+        val ciphertext: ByteArray
+    )
+
     fun wrapMasterKey(masterKey: SecretKey, passphrase: String): WrappedKeyData {
         val salt = ByteArray(SALT_SIZE_BYTES).also { secureRandom.nextBytes(it) }
         val pbeKey = deriveKeyFromPassword(passphrase, salt)
@@ -218,6 +239,76 @@ class VaultKeyManager(
         saveAuthConfig(config)
 
         return keyToWrap
+    }
+
+    /**
+     * Recovery Slot: Wraps the real master key using a key derived from the offline Recovery Code.
+     */
+    fun wrapMasterKeyForRecovery(masterKey: SecretKey, recoveryCode: String): RecoverySlotData {
+        val normalized = normalizeRecoveryCode(recoveryCode)
+        val salt = ByteArray(SALT_SIZE_BYTES).also { secureRandom.nextBytes(it) }
+        val recoveryKey = deriveKeyFromPassword(normalized, salt)
+
+        val iv = ByteArray(GCM_IV_SIZE_BYTES).also { secureRandom.nextBytes(it) }
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.ENCRYPT_MODE, recoveryKey, GCMParameterSpec(GCM_TAG_LENGTH_BITS, iv))
+        val ciphertext = cipher.doFinal(masterKey.encoded)
+
+        return RecoverySlotData(salt, iv, ciphertext)
+    }
+
+    /**
+     * Unwraps the real master key using the offline Recovery Code.
+     * Throws GeneralSecurityException if code is incorrect or corrupted.
+     */
+    fun unwrapMasterKeyWithRecovery(recoveryCode: String): SecretKey {
+        val config = readAuthConfig()
+        if (!config.has("recovery_wrapped_key") || !config.has("recovery_salt") || !config.has("recovery_iv")) {
+            throw IllegalStateException("No recovery slot configured in vault.")
+        }
+
+        val normalized = normalizeRecoveryCode(recoveryCode)
+        val salt = SafeBase64.decode(config.getString("recovery_salt"))
+        val iv = SafeBase64.decode(config.getString("recovery_iv"))
+        val ciphertext = SafeBase64.decode(config.getString("recovery_wrapped_key"))
+
+        val recoveryKey = deriveKeyFromPassword(normalized, salt)
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.DECRYPT_MODE, recoveryKey, GCMParameterSpec(GCM_TAG_LENGTH_BITS, iv))
+        val masterKeyBytes = cipher.doFinal(ciphertext)
+
+        return SecretKeySpec(masterKeyBytes, "AES")
+    }
+
+    fun saveRecoverySlot(slot: RecoverySlotData) {
+        val config = readAuthConfig()
+        config.put("recovery_salt", SafeBase64.encode(slot.salt))
+        config.put("recovery_iv", SafeBase64.encode(slot.iv))
+        config.put("recovery_wrapped_key", SafeBase64.encode(slot.ciphertext))
+        saveAuthConfig(config)
+    }
+
+    fun hasRecoveryConfigured(): Boolean {
+        val config = readAuthConfig()
+        return config.has("recovery_wrapped_key") && config.has("recovery_salt") && config.has("recovery_iv")
+    }
+
+    fun wipeVaultCompletely(): Boolean {
+        return try {
+            val configFile = getConfigFile()
+            val metaDir = configFile.parentFile
+            val root = baseDir ?: context?.filesDir ?: File(".")
+            val vaultDir = File(root, "vault")
+            val selfiesDir = File(root, "intruder_selfies")
+
+            metaDir?.deleteRecursively()
+            vaultDir.deleteRecursively()
+            selfiesDir.deleteRecursively()
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Error wiping vault: ${e.message}", e)
+            false
+        }
     }
 
     sealed class UnlockResult {

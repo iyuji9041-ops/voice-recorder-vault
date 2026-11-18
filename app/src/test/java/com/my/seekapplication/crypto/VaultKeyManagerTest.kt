@@ -128,4 +128,45 @@ class VaultKeyManagerTest {
         val success = newUnlock as VaultKeyManager.UnlockResult.Success
         assertArrayEquals(originalMasterKey.encoded, success.masterKey.encoded)
     }
+
+    @Test
+    fun testWrapAndUnwrapMasterKeyWithRecoveryCode() {
+        val manager = createKeyManager()
+        val realMasterKey = manager.setPassword("real_vault_pin_123456", isReal = true)
+        val recoveryCode = VaultKeyManager.generateRecoveryCode()
+
+        assertFalse(manager.hasRecoveryConfigured())
+
+        val recoverySlot = manager.wrapMasterKeyForRecovery(realMasterKey, recoveryCode)
+        manager.saveRecoverySlot(recoverySlot)
+        assertTrue(manager.hasRecoveryConfigured())
+
+        // Unwrap with normalized recovery code (even with spaces or lowercase)
+        val unwrappedKey = manager.unwrapMasterKeyWithRecovery(recoveryCode.lowercase().replace("-", " "))
+        assertNotNull(unwrappedKey)
+        assertArrayEquals(realMasterKey.encoded, unwrappedKey.encoded)
+    }
+
+    @Test(expected = Exception::class)
+    fun testWrongRecoveryCodeThrowsException() {
+        val manager = createKeyManager()
+        val realMasterKey = manager.setPassword("real_vault_pin_123456", isReal = true)
+        val recoveryCode = VaultKeyManager.generateRecoveryCode()
+        val recoverySlot = manager.wrapMasterKeyForRecovery(realMasterKey, recoveryCode)
+        manager.saveRecoverySlot(recoverySlot)
+
+        // Attempt unwrapping with completely wrong code
+        manager.unwrapMasterKeyWithRecovery("INVALID-CODE-0000-0000")
+    }
+
+    @Test
+    fun testWipeVaultCompletelyRemovesAllFiles() {
+        val manager = createKeyManager()
+        manager.setPassword("vault_passcode", isReal = true)
+        assertTrue(manager.isVaultConfigured())
+
+        val wiped = manager.wipeVaultCompletely()
+        assertTrue(wiped)
+        assertFalse(manager.isVaultConfigured())
+    }
 }

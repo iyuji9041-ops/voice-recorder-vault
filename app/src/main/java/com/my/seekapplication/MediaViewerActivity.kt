@@ -53,7 +53,7 @@ import java.util.Locale
  * 3. Android 16 Edge-to-Edge with notch / cutout protection.
  */
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
-class MediaViewerActivity : AppCompatActivity() {
+class MediaViewerActivity : BaseVaultActivity() {
 
     private val tag = "MediaViewerActivity"
 

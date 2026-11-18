@@ -1,0 +1,536 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/rootSetupWizard"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0A0A0A"
+    android:orientation="vertical">
+
+    <!-- Top Bar -->
+    <RelativeLayout
+        android:id="@+id/topBarSetup"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp">
+
+        <TextView
+            android:id="@+id/tvSetupWizardTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerVertical="true"
+            android:text="Vault Security Setup"
+            android:textColor="#FFFFFF"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tvStepIndicator"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentEnd="true"
+            android:layout_centerVertical="true"
+            android:text="Step 1 of 5"
+            android:textColor="#00E676"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+    </RelativeLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:padding="20dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <!-- STEP 1: DOOR PASSCODE -->
+            <LinearLayout
+                android:id="@+id/containerStepDoor"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="visible">
+
+                <ImageView
+                    android:layout_width="56dp"
+                    android:layout_height="56dp"
+                    android:layout_gravity="center"
+                    android:src="@drawable/ic_pin_vector"
+                    app:tint="#00E676"
+                    android:layout_marginBottom="16dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Entrance Passcode (Layer 1)"
+                    android:textColor="#FFFFFF"
+                    android:textSize="20sp"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="8dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Set a 6-digit numeric passcode. This protects the secret door inside the Voice Recorder disguise."
+                    android:textColor="#AAAAAA"
+                    android:textSize="14sp"
+                    android:lineSpacingExtra="4dp"
+                    android:layout_marginBottom="24dp" />
+
+                <EditText
+                    android:id="@+id/etDoorCode"
+                    android:layout_width="match_parent"
+                    android:layout_height="56dp"
+                    android:background="@drawable/bg_glass_input"
+                    android:hint="6-Digit Numeric Passcode"
+                    android:textColor="#FFFFFF"
+                    android:textColorHint="#66FFFFFF"
+                    android:inputType="numberPassword"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp"
+                    android:layout_marginBottom="12dp" />
+
+                <EditText
+                    android:id="@+id/etDoorCodeConfirm"
+                    android:layout_width="match_parent"
+                    android:layout_height="56dp"
+                    android:background="@drawable/bg_glass_input"
+                    android:hint="Confirm Passcode"
+                    android:textColor="#FFFFFF"
+                    android:textColorHint="#66FFFFFF"
+                    android:inputType="numberPassword"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp"
+                    android:layout_marginBottom="24dp" />
+
+                <Button
+                    android:id="@+id/btnNextDoor"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:text="NEXT: REAL VAULT KEY"
+                    android:textColor="#000000"
+                    android:textSize="15sp"
+                    android:textStyle="bold"
+                    android:background="@drawable/bg_glass_button_green" />
+            </LinearLayout>
+
+            <!-- STEP 2: REAL VAULT KEY -->
+            <LinearLayout
+                android:id="@+id/containerStepReal"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <ImageView
+                    android:layout_width="56dp"
+                    android:layout_height="56dp"
+                    android:layout_gravity="center"
+                    android:src="@drawable/ic_shield_vector"
+                    app:tint="#00E676"
+                    android:layout_marginBottom="16dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Real Vault Master Key"
+                    android:textColor="#FFFFFF"
+                    android:textSize="20sp"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="8dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Choose your preferred lock type and set your primary vault credential."
+                    android:textColor="#AAAAAA"
+                    android:textSize="14sp"
+                    android:layout_marginBottom="16dp" />
+
+                <!-- Lock Type Selector -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:orientation="horizontal"
+                    android:layout_marginBottom="20dp">
+
+                    <Button
+                        android:id="@+id/btnTypePin"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:text="PIN (6+)"
+                        android:textSize="12sp"
+                        android:textStyle="bold"
+                        android:background="@drawable/bg_glass_button_green"
+                        android:textColor="#000000"
+                        android:layout_marginEnd="6dp" />
+
+                    <Button
+                        android:id="@+id/btnTypePassword"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:text="PASSWORD (8+)"
+                        android:textSize="12sp"
+                        android:textStyle="bold"
+                        android:background="@drawable/bg_glass_input"
+                        android:textColor="#FFFFFF"
+                        android:layout_marginStart="3dp"
+                        android:layout_marginEnd="3dp" />
+
+                    <Button
+                        android:id="@+id/btnTypePattern"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:text="PATTERN (5+)"
+                        android:textSize="12sp"
+                        android:textStyle="bold"
+                        android:background="@drawable/bg_glass_input"
+                        android:textColor="#FFFFFF"
+                        android:layout_marginStart="6dp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/layoutRealTextInputs"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <EditText
+                        android:id="@+id/etRealKey"
+                        android:layout_width="match_parent"
+                        android:layout_height="56dp"
+                        android:background="@drawable/bg_glass_input"
+                        android:hint="Enter Real PIN"
+                        android:textColor="#FFFFFF"
+                        android:textColorHint="#66FFFFFF"
+                        android:inputType="numberPassword"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="16dp"
+                        android:layout_marginBottom="12dp" />
+
+                    <EditText
+                        android:id="@+id/etRealKeyConfirm"
+                        android:layout_width="match_parent"
+                        android:layout_height="56dp"
+                        android:background="@drawable/bg_glass_input"
+                        android:hint="Confirm Real PIN"
+                        android:textColor="#FFFFFF"
+                        android:textColorHint="#66FFFFFF"
+                        android:inputType="numberPassword"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="16dp"
+                        android:layout_marginBottom="24dp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/layoutRealPatternInput"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:id="@+id/tvPatternPrompt"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Draw your Real Pattern (5+ dots)"
+                        android:textColor="#00E676"
+                        android:layout_marginBottom="8dp" />
+
+                    <com.my.seekapplication.PatternLockView
+                        android:id="@+id/patternViewReal"
+                        android:layout_width="280dp"
+                        android:layout_height="280dp"
+                        android:layout_marginBottom="16dp" />
+                </LinearLayout>
+
+                <Button
+                    android:id="@+id/btnNextReal"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:text="NEXT: DECOY VAULT KEY"
+                    android:textColor="#000000"
+                    android:textSize="15sp"
+                    android:textStyle="bold"
+                    android:background="@drawable/bg_glass_button_green" />
+            </LinearLayout>
+
+            <!-- STEP 3: DECOY VAULT KEY -->
+            <LinearLayout
+                android:id="@+id/containerStepDecoy"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <ImageView
+                    android:layout_width="56dp"
+                    android:layout_height="56dp"
+                    android:layout_gravity="center"
+                    android:src="@drawable/ic_lock_type_vector"
+                    app:tint="#00E676"
+                    android:layout_marginBottom="16dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Decoy Vault Key"
+                    android:textColor="#FFFFFF"
+                    android:textSize="20sp"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="8dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Set a DIFFERENT key for decoy mode. If coerced to open the vault, entering this key opens a separate decoy vault with zero trace of your real files."
+                    android:textColor="#AAAAAA"
+                    android:textSize="14sp"
+                    android:lineSpacingExtra="4dp"
+                    android:layout_marginBottom="24dp" />
+
+                <LinearLayout
+                    android:id="@+id/layoutDecoyTextInputs"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <EditText
+                        android:id="@+id/etDecoyKey"
+                        android:layout_width="match_parent"
+                        android:layout_height="56dp"
+                        android:background="@drawable/bg_glass_input"
+                        android:hint="Enter Decoy Key"
+                        android:textColor="#FFFFFF"
+                        android:textColorHint="#66FFFFFF"
+                        android:inputType="numberPassword"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="16dp"
+                        android:layout_marginBottom="12dp" />
+
+                    <EditText
+                        android:id="@+id/etDecoyKeyConfirm"
+                        android:layout_width="match_parent"
+                        android:layout_height="56dp"
+                        android:background="@drawable/bg_glass_input"
+                        android:hint="Confirm Decoy Key"
+                        android:textColor="#FFFFFF"
+                        android:textColorHint="#66FFFFFF"
+                        android:inputType="numberPassword"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="16dp"
+                        android:layout_marginBottom="24dp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/layoutDecoyPatternInput"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:id="@+id/tvDecoyPatternPrompt"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Draw your Decoy Pattern (must differ from real)"
+                        android:textColor="#00E676"
+                        android:layout_marginBottom="8dp" />
+
+                    <com.my.seekapplication.PatternLockView
+                        android:id="@+id/patternViewDecoy"
+                        android:layout_width="280dp"
+                        android:layout_height="280dp"
+                        android:layout_marginBottom="16dp" />
+                </LinearLayout>
+
+                <Button
+                    android:id="@+id/btnNextDecoy"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:text="NEXT: RECOVERY CODE"
+                    android:textColor="#000000"
+                    android:textSize="15sp"
+                    android:textStyle="bold"
+                    android:background="@drawable/bg_glass_button_green" />
+            </LinearLayout>
+
+            <!-- STEP 4: RECOVERY CODE -->
+            <LinearLayout
+                android:id="@+id/containerStepRecovery"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <ImageView
+                    android:layout_width="56dp"
+                    android:layout_height="56dp"
+                    android:layout_gravity="center"
+                    android:src="@drawable/ic_key_vector"
+                    app:tint="#00E676"
+                    android:layout_marginBottom="16dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Offline Recovery Code"
+                    android:textColor="#FFFFFF"
+                    android:textSize="20sp"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="8dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Because this app is 100% offline with zero cloud servers, this 16-character recovery code is the ONLY way to recover your vault if you forget your master password."
+                    android:textColor="#AAAAAA"
+                    android:textSize="14sp"
+                    android:lineSpacingExtra="4dp"
+                    android:layout_marginBottom="20dp" />
+
+                <!-- Recovery Code Display Box -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_glass_note_card"
+                    android:orientation="vertical"
+                    android:padding="16dp"
+                    android:gravity="center"
+                    android:layout_marginBottom="16dp">
+
+                    <TextView
+                        android:id="@+id/tvDisplayRecoveryCode"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="XXXX-XXXX-XXXX-XXXX"
+                        android:textColor="#00E676"
+                        android:textSize="22sp"
+                        android:textStyle="bold"
+                        android:letterSpacing="0.12"
+                        android:layout_marginBottom="10dp" />
+
+                    <Button
+                        android:id="@+id/btnCopyRecoveryCode"
+                        android:layout_width="wrap_content"
+                        android:layout_height="36dp"
+                        android:text="COPY CODE"
+                        android:textColor="#FFFFFF"
+                        android:textSize="12sp"
+                        android:textStyle="bold"
+                        android:background="@drawable/bg_glass_input"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="16dp" />
+                </LinearLayout>
+
+                <CheckBox
+                    android:id="@+id/cbRecoverySaved"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="I have safely recorded or written down this recovery code."
+                    android:textColor="#FFFFFF"
+                    android:textSize="13sp"
+                    android:layout_marginBottom="16dp" />
+
+                <!-- Optional Security Question -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Optional Extra Factor: Security Answer"
+                    android:textColor="#88FFFFFF"
+                    android:textSize="12sp"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="8dp" />
+
+                <EditText
+                    android:id="@+id/etOptionalSecAnswer"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:background="@drawable/bg_glass_input"
+                    android:hint="First school or secret keyword (optional)"
+                    android:textColor="#FFFFFF"
+                    android:textColorHint="#66FFFFFF"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp"
+                    android:layout_marginBottom="24dp" />
+
+                <Button
+                    android:id="@+id/btnNextRecovery"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:text="NEXT: SECURITY CAMERA"
+                    android:textColor="#000000"
+                    android:textSize="15sp"
+                    android:textStyle="bold"
+                    android:background="@drawable/bg_glass_button_green" />
+            </LinearLayout>
+
+            <!-- STEP 5: CAMERA PERMISSION -->
+            <LinearLayout
+                android:id="@+id/containerStepCamera"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <ImageView
+                    android:layout_width="56dp"
+                    android:layout_height="56dp"
+                    android:layout_gravity="center"
+                    android:src="@drawable/ic_camera_vector"
+                    app:tint="#00E676"
+                    android:layout_marginBottom="16dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Intruder Camera Protection"
+                    android:textColor="#FFFFFF"
+                    android:textSize="20sp"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="8dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Enable camera permission so the vault can silently photograph anyone who enters an incorrect passcode or vault key.\n\nCaptured photos are asymmetrically encrypted using RSA-2048 while the vault is locked and stored safely in your sandbox."
+                    android:textColor="#AAAAAA"
+                    android:textSize="14sp"
+                    android:lineSpacingExtra="4dp"
+                    android:layout_marginBottom="28dp" />
+
+                <Button
+                    android:id="@+id/btnGrantCamera"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:text="GRANT CAMERA &amp; COMPLETE SETUP"
+                    android:textColor="#000000"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:background="@drawable/bg_glass_button_green"
+                    android:layout_marginBottom="12dp" />
+
+                <Button
+                    android:id="@+id/btnSkipCamera"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:text="SKIP (LOG AUDIT ONLY)"
+                    android:textColor="#FFFFFF"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:background="@drawable/bg_glass_input" />
+            </LinearLayout>
+
+        </LinearLayout>
+    </ScrollView>
+
+</LinearLayout>

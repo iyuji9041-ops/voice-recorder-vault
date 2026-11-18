@@ -12,16 +12,16 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.RelativeLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
+import com.my.seekapplication.crypto.CredentialPolicy
+import com.my.seekapplication.crypto.VaultKeyManager
 import com.my.seekapplication.data.VaultBackupManager
 import com.my.seekapplication.data.VaultRepository
 import com.my.seekapplication.data.VaultSession
@@ -31,15 +31,16 @@ import kotlinx.coroutines.withContext
 
 /**
  * SettingsActivity: Vault configuration screen for changing lock types (PIN, Pattern, Password),
- * updating master/decoy keys, configuring secret trigger hold duration, door passcodes, security recovery,
- * and encrypted offline backup export/import (.svb).
+ * updating real/decoy keys, configuring secret trigger hold duration, door passcodes, auto-lock grace period,
+ * security recovery, viewing offline recovery code, and encrypted backup (.svb).
  */
-class SettingsActivity : AppCompatActivity() {
+class SettingsActivity : BaseVaultActivity() {
 
     private lateinit var tvCurrentLockType: TextView
     private lateinit var tvRealKeyTitle: TextView
     private lateinit var tvFakeKeyTitle: TextView
     private lateinit var tvCurrentHoldDuration: TextView
+    private lateinit var tvCurrentAutoLock: TextView
 
     private var tempRealKeySetup: String? = null
     private var pendingExportPassword = ""
@@ -62,9 +63,6 @@ class SettingsActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // FLAG_SECURE prevents screenshots and screen recording
-        window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
         supportActionBar?.hide()
         enableEdgeToEdge()
 
@@ -86,14 +84,26 @@ class SettingsActivity : AppCompatActivity() {
         val btnChangeHold = findViewById<LinearLayout>(R.id.btnChangeHoldDuration)
         val btnChangeDoor = findViewById<LinearLayout>(R.id.btnChangeDoorPasscode)
         val btnChangeRecovery = findViewById<LinearLayout>(R.id.btnChangeRecoveryQuestion)
+        val btnAutoLock = findViewById<LinearLayout>(R.id.btnAutoLock)
         val btnIntruderSelfie = findViewById<LinearLayout>(R.id.btnIntruderSelfie)
+        val btnViewRecoveryCode = findViewById<LinearLayout>(R.id.btnViewRecoveryCode)
+        val btnWipeVault = findViewById<LinearLayout>(R.id.btnWipeVault)
 
         tvCurrentLockType = findViewById(R.id.tvCurrentLockType)
         tvRealKeyTitle = findViewById(R.id.tvRealKeyTitle)
         tvFakeKeyTitle = findViewById(R.id.tvFakeKeyTitle)
         tvCurrentHoldDuration = findViewById(R.id.tvCurrentHoldDuration)
+        tvCurrentAutoLock = findViewById(R.id.tvCurrentAutoLock)
 
         btnBack.setOnClickListener { finish() }
+
+        // Decoy mode parity: Hide options that leak decoy / real duality
+        if (VaultSession.isDecoy) {
+            btnChangeFake.visibility = View.GONE
+            btnIntruderSelfie.visibility = View.GONE
+            btnViewRecoveryCode.visibility = View.GONE
+            btnWipeVault.visibility = View.GONE
+        }
 
         refreshLabels()
 
@@ -121,8 +131,20 @@ class SettingsActivity : AppCompatActivity() {
             showRecoveryQuestionDialog()
         }
 
+        btnAutoLock.setOnClickListener {
+            showAutoLockDialog()
+        }
+
         btnIntruderSelfie.setOnClickListener {
             startActivity(Intent(this, IntruderListActivity::class.java))
+        }
+
+        btnViewRecoveryCode.setOnClickListener {
+            promptViewRecoveryCode()
+        }
+
+        btnWipeVault.setOnClickListener {
+            promptWipeVault()
         }
 
         val btnExportBackup = findViewById<LinearLayout>(R.id.btnExportBackup)
@@ -148,7 +170,7 @@ class SettingsActivity : AppCompatActivity() {
             .setMessage("100% OFFLINE ZERO-DATA POLICY\n\n• Zero Cloud Uploads: Your recordings and hidden vault files never leave your device.\n• AES-256-GCM Encryption: Photos, videos, and audios are locally encrypted.\n• Local Permissions Only: Camera and Microphone are used strictly on-device for recordings and security intruder selfies.\n\nOur full open-source privacy policy is available online.")
             .setPositiveButton("Open Web Policy") { _, _ ->
                 try {
-                    val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(policyUrl))
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(policyUrl))
                     startActivity(intent)
                 } catch (e: Exception) {
                     Toast.makeText(this, "Policy URL: $policyUrl", Toast.LENGTH_LONG).show()
@@ -161,16 +183,50 @@ class SettingsActivity : AppCompatActivity() {
     private fun refreshLabels() {
         val currentLockType = VaultSecurityManager.getLockType(this)
         val typeName = when (currentLockType) {
-            VaultSecurityManager.LockType.PIN -> "4-Digit PIN"
-            VaultSecurityManager.LockType.PATTERN -> "3x3 Pattern Lock"
-            VaultSecurityManager.LockType.PASSWORD -> "Text Password"
+            VaultSecurityManager.LockType.PIN -> "PIN (6+ Digits)"
+            VaultSecurityManager.LockType.PATTERN -> "Pattern (5+ Dots)"
+            VaultSecurityManager.LockType.PASSWORD -> "Password (8+ Chars)"
         }
         tvCurrentLockType.text = "Current: $typeName"
-        tvRealKeyTitle.text = "Change Real $typeName"
-        tvFakeKeyTitle.text = "Change Fake $typeName"
+        if (VaultSession.isDecoy) {
+            tvRealKeyTitle.text = "Change $typeName"
+        } else {
+            tvRealKeyTitle.text = "Change Real $typeName"
+            tvFakeKeyTitle.text = "Change Decoy $typeName"
+        }
 
         val seconds = VaultSecurityManager.getHoldDurationSeconds(this)
         tvCurrentHoldDuration.text = "Current: $seconds seconds"
+
+        val autoLockSec = AutoLockManager.getGracePeriodSeconds(this)
+        tvCurrentAutoLock.text = if (autoLockSec == 0) {
+            "Current: Immediate"
+        } else {
+            "Current: $autoLockSec seconds"
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // AUTO-LOCK GRACE PERIOD PICKER
+    // ---------------------------------------------------------------------------------------------
+
+    private fun showAutoLockDialog() {
+        val options = arrayOf("Immediate (Recommended)", "15 Seconds", "30 Seconds", "1 Minute", "5 Minutes")
+        val values = intArrayOf(0, 15, 30, 60, 300)
+        val currentSec = AutoLockManager.getGracePeriodSeconds(this)
+        val checkedItem = values.indexOf(currentSec).takeIf { it >= 0 } ?: 0
+
+        AlertDialog.Builder(this)
+            .setTitle("Auto-Lock Grace Period")
+            .setSingleChoiceItems(options, checkedItem) { dialog, which ->
+                val chosenSec = values[which]
+                AutoLockManager.setGracePeriodSeconds(this, chosenSec)
+                refreshLabels()
+                Toast.makeText(this, "Auto-lock set to ${options[which]}", Toast.LENGTH_SHORT).show()
+                dialog.dismiss()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -218,15 +274,16 @@ class SettingsActivity : AppCompatActivity() {
         val btnSubmit = dialog.findViewById<Button>(R.id.btnSubmitDoor)
 
         tvTitle.text = "Update Door Passcode"
-        tvSubtitle.text = "Set new 4-digit code for Layer 1 entrance"
+        tvSubtitle.text = "Set new 6-digit code for Layer 1 entrance"
         btnForgot.visibility = View.GONE
 
         btnCancel.setOnClickListener { dialog.dismiss() }
 
         btnSubmit.setOnClickListener {
             val code = etInput.text.toString().trim()
-            if (code.length < 4) {
-                Toast.makeText(this, "Passcode must be at least 4 digits!", Toast.LENGTH_SHORT).show()
+            val validation = CredentialPolicy.validateDoorPasscode(code)
+            if (validation is CredentialPolicy.ValidationResult.Invalid) {
+                Toast.makeText(this, validation.reason, Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
@@ -260,7 +317,7 @@ class SettingsActivity : AppCompatActivity() {
         val btnSubmit = dialog.findViewById<Button>(R.id.btnSubmitRecovery)
 
         tvTitle.text = "Security Recovery Setup"
-        tvSubtitle.text = "Used to reset passwords if you ever forget them"
+        tvSubtitle.text = "Used as an extra factor to reset passwords"
         tvQuestion.text = "Security Question:\nWhat was your first school or favorite keyword?"
         etAnswer.hint = "Your secret recovery answer"
         btnSubmit.text = "SAVE ANSWER"
@@ -374,24 +431,25 @@ class SettingsActivity : AppCompatActivity() {
         val patternView = dialog.findViewById<PatternLockView>(R.id.patternLockView)
         val btnCancel = dialog.findViewById<Button>(R.id.btnCancelPattern)
 
-        tvTitle.text = if (isReal) "Set New Real Pattern" else "Set New Fake Pattern"
-        tvSubtitle.text = "Connect at least 4 dots"
+        tvTitle.text = if (isReal) "Set New Real Pattern" else "Set New Decoy Pattern"
+        tvSubtitle.text = "Connect at least 5 dots"
 
         btnCancel.setOnClickListener { dialog.dismiss() }
 
         patternView.onPatternListener = { pattern ->
-            if (pattern.length < 4) {
-                Toast.makeText(this, "Connect at least 4 dots!", Toast.LENGTH_SHORT).show()
+            val validation = CredentialPolicy.validatePattern(pattern)
+            if (validation is CredentialPolicy.ValidationResult.Invalid) {
+                Toast.makeText(this, validation.reason, Toast.LENGTH_SHORT).show()
                 patternView.setErrorState(true)
                 patternView.postDelayed({ patternView.resetPattern() }, 600)
             } else {
                 val oppositeResult = VaultSecurityManager.checkPassword(this, pattern)
                 if (isReal && oppositeResult == VaultSecurityManager.PasswordCheckResult.DECOY) {
-                    Toast.makeText(this, "Real pattern cannot match current Fake pattern!", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this, "Real pattern cannot match current Decoy pattern!", Toast.LENGTH_LONG).show()
                     patternView.setErrorState(true)
                     patternView.postDelayed({ patternView.resetPattern() }, 600)
                 } else if (!isReal && oppositeResult == VaultSecurityManager.PasswordCheckResult.REAL) {
-                    Toast.makeText(this, "Fake pattern cannot match current Real pattern!", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this, "Decoy pattern cannot match current Real pattern!", Toast.LENGTH_LONG).show()
                     patternView.setErrorState(true)
                     patternView.postDelayed({ patternView.resetPattern() }, 600)
                 } else {
@@ -419,33 +477,32 @@ class SettingsActivity : AppCompatActivity() {
         val dialogSetButton = dialog.findViewById<Button>(R.id.dialogSetButton)
 
         val keyTypeName = if (isPin) "PIN" else "Password"
-        dialogTitle.text = if (isReal) "Set New Real $keyTypeName" else "Set New Fake $keyTypeName"
+        dialogTitle.text = if (isReal) "Set New Real $keyTypeName" else "Set New Decoy $keyTypeName"
         dialogSetButton.text = "UPDATE $keyTypeName"
 
         if (isPin) {
             dialogInput.inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
-            dialogInput.hint = "New Numeric PIN"
+            dialogInput.hint = "New Numeric PIN (6+ digits)"
         } else {
             dialogInput.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-            dialogInput.hint = "New Password"
+            dialogInput.hint = "New Password (8+ characters)"
         }
 
         dialogSetButton.setOnClickListener {
             val newKey = dialogInput.text.toString().trim()
-            val minLen = 4
-
-            if (newKey.length < minLen) {
-                Toast.makeText(this, "$keyTypeName must be at least $minLen characters", Toast.LENGTH_SHORT).show()
+            val validation = if (isPin) CredentialPolicy.validatePin(newKey) else CredentialPolicy.validatePassword(newKey)
+            if (validation is CredentialPolicy.ValidationResult.Invalid) {
+                Toast.makeText(this, validation.reason, Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
             val oppositeResult = VaultSecurityManager.checkPassword(this, newKey)
             if (isReal && oppositeResult == VaultSecurityManager.PasswordCheckResult.DECOY) {
-                Toast.makeText(this, "Real $keyTypeName cannot match current Fake $keyTypeName!", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "Real $keyTypeName cannot match current Decoy $keyTypeName!", Toast.LENGTH_LONG).show()
                 return@setOnClickListener
             }
             if (!isReal && oppositeResult == VaultSecurityManager.PasswordCheckResult.REAL) {
-                Toast.makeText(this, "Fake $keyTypeName cannot match current Real $keyTypeName!", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "Decoy $keyTypeName cannot match current Real $keyTypeName!", Toast.LENGTH_LONG).show()
                 return@setOnClickListener
             }
 
@@ -477,17 +534,18 @@ class SettingsActivity : AppCompatActivity() {
 
         if (isReal) {
             tvTitle.text = "Set NEW Real Pattern"
-            tvSubtitle.text = "Connect at least 4 dots"
+            tvSubtitle.text = "Connect at least 5 dots"
         } else {
-            tvTitle.text = "Set NEW Fake Pattern"
-            tvSubtitle.text = "Draw a DIFFERENT pattern for decoy mode"
+            tvTitle.text = "Set NEW Decoy Pattern"
+            tvSubtitle.text = "Draw a DIFFERENT pattern (5+ dots)"
         }
 
         btnCancel.setOnClickListener { dialog.dismiss() }
 
         patternView.onPatternListener = { pattern ->
-            if (pattern.length < 4) {
-                Toast.makeText(this, "Connect at least 4 dots!", Toast.LENGTH_SHORT).show()
+            val validation = CredentialPolicy.validatePattern(pattern)
+            if (validation is CredentialPolicy.ValidationResult.Invalid) {
+                Toast.makeText(this, validation.reason, Toast.LENGTH_SHORT).show()
                 patternView.setErrorState(true)
                 patternView.postDelayed({ patternView.resetPattern() }, 600)
             } else {
@@ -495,11 +553,11 @@ class SettingsActivity : AppCompatActivity() {
                     tempRealKeySetup = pattern
                     VaultSecurityManager.setPassword(this, pattern, isReal = true)
                     dialog.dismiss()
-                    Toast.makeText(this, "Real Pattern Saved. Now set Fake Pattern.", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "Real Pattern Saved. Now set Decoy Pattern.", Toast.LENGTH_SHORT).show()
                     showSetupPatternDialog(isReal = false, onComplete = onComplete)
                 } else {
-                    if (pattern == tempRealKeySetup) {
-                        Toast.makeText(this, "Fake pattern cannot match Real pattern!", Toast.LENGTH_LONG).show()
+                    if (CredentialPolicy.constantTimeEquals(pattern, tempRealKeySetup ?: "")) {
+                        Toast.makeText(this, "Decoy pattern cannot match Real pattern!", Toast.LENGTH_LONG).show()
                         patternView.setErrorState(true)
                         patternView.postDelayed({ patternView.resetPattern() }, 600)
                     } else {
@@ -532,21 +590,20 @@ class SettingsActivity : AppCompatActivity() {
 
         if (isPin) {
             dialogInput.inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
-            dialogTitle.text = if (isReal) "Set REAL Numeric PIN" else "Set FAKE Numeric PIN"
-            dialogInput.hint = if (isReal) "4-Digit Real PIN" else "4-Digit Fake PIN"
+            dialogTitle.text = if (isReal) "Set REAL Numeric PIN" else "Set DECOY Numeric PIN"
+            dialogInput.hint = if (isReal) "6-Digit Real PIN" else "6-Digit Decoy PIN"
         } else {
             dialogInput.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-            dialogTitle.text = if (isReal) "Set REAL Password" else "Set FAKE Password"
-            dialogInput.hint = if (isReal) "Real Password" else "Fake Password"
+            dialogTitle.text = if (isReal) "Set REAL Password" else "Set DECOY Password"
+            dialogInput.hint = if (isReal) "Real Password (8+ chars)" else "Decoy Password (8+ chars)"
         }
         dialogSetButton.text = "SAVE"
 
         dialogSetButton.setOnClickListener {
             val key = dialogInput.text.toString().trim()
-            val minLen = 4
-
-            if (key.length < minLen) {
-                Toast.makeText(this, "$keyTypeName must be at least $minLen characters!", Toast.LENGTH_SHORT).show()
+            val validation = if (isPin) CredentialPolicy.validatePin(key) else CredentialPolicy.validatePassword(key)
+            if (validation is CredentialPolicy.ValidationResult.Invalid) {
+                Toast.makeText(this, validation.reason, Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
@@ -554,11 +611,11 @@ class SettingsActivity : AppCompatActivity() {
                 tempRealKeySetup = key
                 VaultSecurityManager.setPassword(this, key, isReal = true)
                 dialog.dismiss()
-                Toast.makeText(this, "Real $keyTypeName Saved. Now set Fake $keyTypeName.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Real $keyTypeName Saved. Now set Decoy $keyTypeName.", Toast.LENGTH_SHORT).show()
                 showSetupTextDialog(isReal = false, isPin = isPin, onComplete = onComplete)
             } else {
-                if (key == tempRealKeySetup) {
-                    Toast.makeText(this, "Fake key cannot be identical to Real key!", Toast.LENGTH_LONG).show()
+                if (CredentialPolicy.constantTimeEquals(key, tempRealKeySetup ?: "")) {
+                    Toast.makeText(this, "Decoy key cannot be identical to Real key!", Toast.LENGTH_LONG).show()
                     return@setOnClickListener
                 }
 
@@ -572,176 +629,190 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     // ---------------------------------------------------------------------------------------------
+    // OFFLINE RECOVERY CODE & FACTORY WIPE
+    // ---------------------------------------------------------------------------------------------
+
+    private fun promptViewRecoveryCode() {
+        val dialog = Dialog(this)
+        dialog.setContentView(R.layout.dialog_glass_password)
+        dialog.window?.let { window ->
+            window.setBackgroundDrawableResource(android.R.color.transparent)
+            window.setDimAmount(0.85f)
+            val dialogWidth = (resources.displayMetrics.widthPixels * 0.90).toInt().coerceAtMost((360 * resources.displayMetrics.density).toInt())
+            window.setLayout(dialogWidth, WindowManager.LayoutParams.WRAP_CONTENT)
+        }
+
+        val tvTitle = dialog.findViewById<TextView>(R.id.dialogTitle)
+        val etInput = dialog.findViewById<EditText>(R.id.dialogInput)
+        val btnSubmit = dialog.findViewById<Button>(R.id.dialogSetButton)
+        val btnForgot = dialog.findViewById<TextView>(R.id.btnForgotPasswordText)
+        btnForgot.visibility = View.GONE
+
+        tvTitle.text = "Authenticate to View Recovery Code"
+        etInput.hint = "Enter your Real Vault Key"
+        val isPin = VaultSecurityManager.getLockType(this) == VaultSecurityManager.LockType.PIN
+        if (isPin) {
+            etInput.inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+        } else {
+            etInput.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+        }
+        btnSubmit.text = "VIEW CODE"
+
+        btnSubmit.setOnClickListener {
+            val key = etInput.text.toString().trim()
+            val check = VaultSecurityManager.checkPassword(this, key)
+            if (check == VaultSecurityManager.PasswordCheckResult.REAL) {
+                dialog.dismiss()
+                val code = com.my.seekapplication.setup.SetupWizardManager.getStagedRecoveryCode(this)
+                AlertDialog.Builder(this)
+                    .setTitle("Your Offline Recovery Code")
+                    .setMessage("Recovery Code:\n\n$code\n\nStore this code securely. It is the only way to recover your vault without your master password.")
+                    .setPositiveButton("DONE", null)
+                    .show()
+            } else {
+                Toast.makeText(this, "Incorrect password!", Toast.LENGTH_SHORT).show()
+            }
+        }
+        dialog.show()
+    }
+
+    private fun promptWipeVault() {
+        AlertDialog.Builder(this)
+            .setTitle("⚠️ Factory Reset / Wipe Vault")
+            .setMessage("DESTRUCTIVE ACTION:\n\nThis will permanently delete all encrypted files, vault keys, intruder selfie logs, and settings.\n\nThis cannot be undone. Are you absolutely certain?")
+            .setPositiveButton("PERMANENTLY WIPE") { _, _ ->
+                val wiped = VaultSecurityManager.wipeVaultCompletely(this)
+                if (wiped) {
+                    Toast.makeText(this, "Vault wiped completely.", Toast.LENGTH_LONG).show()
+                    val intent = Intent(this, VoiceRecorderActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                    }
+                    startActivity(intent)
+                    finish()
+                } else {
+                    Toast.makeText(this, "Error wiping vault.", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    // ---------------------------------------------------------------------------------------------
     // ENCRYPTED BACKUP (.svb) EXPORT & IMPORT
     // ---------------------------------------------------------------------------------------------
 
     private fun promptExportBackup() {
         val repo = VaultSession.getRepositoryOrNull()
         if (repo == null) {
-            Toast.makeText(this, "Vault session is locked. Please unlock the vault first.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Active vault session expired.", Toast.LENGTH_SHORT).show()
             return
         }
 
-        val input = EditText(this).apply {
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-            hint = "Backup Passphrase (min 6 characters)"
-            setPadding(40, 30, 40, 30)
+        val dialog = Dialog(this)
+        dialog.setContentView(R.layout.dialog_glass_password)
+        dialog.window?.let { window ->
+            window.setBackgroundDrawableResource(android.R.color.transparent)
+            window.setDimAmount(0.85f)
+            val dialogWidth = (resources.displayMetrics.widthPixels * 0.90).toInt().coerceAtMost((360 * resources.displayMetrics.density).toInt())
+            window.setLayout(dialogWidth, WindowManager.LayoutParams.WRAP_CONTENT)
         }
 
-        AlertDialog.Builder(this)
-            .setTitle("Export Encrypted Backup")
-            .setMessage("Set a strong passphrase to encrypt your backup file (.svb). You must remember this passphrase to restore your files in the future:")
-            .setView(input)
-            .setPositiveButton("CONTINUE") { _, _ ->
-                val password = input.text.toString().trim()
-                if (password.length < 6) {
-                    Toast.makeText(this, "Passphrase must be at least 6 characters!", Toast.LENGTH_SHORT).show()
-                    return@setPositiveButton
-                }
-                pendingExportPassword = password
-                val defaultFilename = "vault_backup_${System.currentTimeMillis()}.svb"
-                exportBackupLauncher.launch(defaultFilename)
+        val tvTitle = dialog.findViewById<TextView>(R.id.dialogTitle)
+        val etInput = dialog.findViewById<EditText>(R.id.dialogInput)
+        val btnSubmit = dialog.findViewById<Button>(R.id.dialogSetButton)
+        val btnForgot = dialog.findViewById<TextView>(R.id.btnForgotPasswordText)
+        btnForgot.visibility = View.GONE
+
+        tvTitle.text = "Set Backup Password"
+        etInput.hint = "Password to encrypt backup (.svb)"
+        etInput.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+        btnSubmit.text = "CHOOSE SAVE LOCATION"
+
+        btnSubmit.setOnClickListener {
+            val pass = etInput.text.toString().trim()
+            if (pass.length < 6) {
+                Toast.makeText(this, "Backup password must be at least 6 characters!", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
             }
-            .setNegativeButton("CANCEL", null)
-            .show()
+            pendingExportPassword = pass
+            dialog.dismiss()
+            exportBackupLauncher.launch("vault_backup_${System.currentTimeMillis()}.svb")
+        }
+
+        dialog.show()
     }
 
-    private fun performExport(uri: Uri, password: String) {
-        val repo = VaultSession.getRepositoryOrNull()
-        if (repo == null) {
-            Toast.makeText(this, "Vault session is locked.", Toast.LENGTH_SHORT).show()
-            return
-        }
+    private fun performExport(destUri: Uri, pass: String) {
+        val repo = VaultSession.getRepositoryOrNull() ?: return
+        Toast.makeText(this, "Exporting encrypted backup...", Toast.LENGTH_SHORT).show()
 
-        val progressDialog = AlertDialog.Builder(this)
-            .setTitle("Exporting Vault Backup")
-            .setMessage("Encrypting items... Please wait.")
-            .setCancelable(false)
-            .create()
-        progressDialog.show()
-
-        lifecycleScope.launch(Dispatchers.IO) {
-            try {
-                contentResolver.openOutputStream(uri)?.use { os ->
-                    val count = VaultBackupManager.exportBackup(
-                        context = applicationContext,
-                        repository = repo,
-                        backupPassword = password,
-                        targetOutputStream = os
-                    ) { current, total ->
-                        runOnUiThread {
-                            progressDialog.setMessage("Encrypting item $current of $total...")
-                        }
-                    }
-                    withContext(Dispatchers.Main) {
-                        progressDialog.dismiss()
-                        AlertDialog.Builder(this@SettingsActivity)
-                            .setTitle("Backup Successful")
-                            .setMessage("Successfully exported $count items to encrypted backup file.\n\nKeep your backup file and passphrase safe.")
-                            .setPositiveButton("OK", null)
-                            .show()
-                    }
-                } ?: run {
-                    withContext(Dispatchers.Main) {
-                        progressDialog.dismiss()
-                        Toast.makeText(this@SettingsActivity, "Failed to open export destination.", Toast.LENGTH_SHORT).show()
-                    }
-                }
-            } catch (e: Exception) {
-                withContext(Dispatchers.Main) {
-                    progressDialog.dismiss()
-                    AlertDialog.Builder(this@SettingsActivity)
-                        .setTitle("Export Failed")
-                        .setMessage("An error occurred during export: ${e.message}")
-                        .setPositiveButton("OK", null)
-                        .show()
-                }
+        lifecycleScope.launch {
+            val count = withContext(Dispatchers.IO) {
+                VaultBackupManager.exportBackup(this@SettingsActivity, repo, destUri, pass)
+            }
+            if (count >= 0) {
+                Toast.makeText(this@SettingsActivity, "Backup exported successfully ($count items)!", Toast.LENGTH_LONG).show()
+            } else {
+                Toast.makeText(this@SettingsActivity, "Failed exporting backup.", Toast.LENGTH_SHORT).show()
             }
         }
     }
 
     private fun promptImportBackupFilePicker() {
-        val repo = VaultSession.getRepositoryOrNull()
-        if (repo == null) {
-            Toast.makeText(this, "Vault session is locked. Please unlock the vault first.", Toast.LENGTH_LONG).show()
-            return
-        }
         importBackupLauncher.launch(arrayOf("*/*"))
     }
 
-    private fun promptImportPassword(uri: Uri) {
+    private fun promptImportPassword(sourceUri: Uri) {
         val repo = VaultSession.getRepositoryOrNull()
         if (repo == null) {
-            Toast.makeText(this, "Vault session is locked. Please unlock the vault first.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Active vault session expired.", Toast.LENGTH_SHORT).show()
             return
         }
 
-        val input = EditText(this).apply {
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-            hint = "Backup Passphrase"
-            setPadding(40, 30, 40, 30)
+        val dialog = Dialog(this)
+        dialog.setContentView(R.layout.dialog_glass_password)
+        dialog.window?.let { window ->
+            window.setBackgroundDrawableResource(android.R.color.transparent)
+            window.setDimAmount(0.85f)
+            val dialogWidth = (resources.displayMetrics.widthPixels * 0.90).toInt().coerceAtMost((360 * resources.displayMetrics.density).toInt())
+            window.setLayout(dialogWidth, WindowManager.LayoutParams.WRAP_CONTENT)
         }
 
-        AlertDialog.Builder(this)
-            .setTitle("Restore Encrypted Backup")
-            .setMessage("Enter the passphrase used when creating this .svb backup file:")
-            .setView(input)
-            .setPositiveButton("RESTORE") { _, _ ->
-                val password = input.text.toString().trim()
-                if (password.isEmpty()) {
-                    Toast.makeText(this, "Passphrase cannot be empty!", Toast.LENGTH_SHORT).show()
-                    return@setPositiveButton
-                }
-                performImport(uri, password, repo)
+        val tvTitle = dialog.findViewById<TextView>(R.id.dialogTitle)
+        val etInput = dialog.findViewById<EditText>(R.id.dialogInput)
+        val btnSubmit = dialog.findViewById<Button>(R.id.dialogSetButton)
+        val btnForgot = dialog.findViewById<TextView>(R.id.btnForgotPasswordText)
+        btnForgot.visibility = View.GONE
+
+        tvTitle.text = "Enter Backup Password"
+        etInput.hint = "Password used when exporting"
+        etInput.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+        btnSubmit.text = "IMPORT BACKUP"
+
+        btnSubmit.setOnClickListener {
+            val pass = etInput.text.toString().trim()
+            if (pass.isEmpty()) {
+                Toast.makeText(this, "Password required!", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
             }
-            .setNegativeButton("CANCEL", null)
-            .show()
+            dialog.dismiss()
+            performImport(sourceUri, pass, repo)
+        }
+
+        dialog.show()
     }
 
-    private fun performImport(uri: Uri, password: String, repo: VaultRepository) {
-        val progressDialog = AlertDialog.Builder(this)
-            .setTitle("Restoring Vault Backup")
-            .setMessage("Decrypting and importing items... Please wait.")
-            .setCancelable(false)
-            .create()
-        progressDialog.show()
+    private fun performImport(sourceUri: Uri, pass: String, repo: VaultRepository) {
+        Toast.makeText(this, "Decrypting and restoring backup...", Toast.LENGTH_SHORT).show()
 
-        lifecycleScope.launch(Dispatchers.IO) {
-            try {
-                contentResolver.openInputStream(uri)?.use { isStream ->
-                    val restored = VaultBackupManager.importBackup(
-                        context = applicationContext,
-                        repository = repo,
-                        backupPassword = password,
-                        backupInputStream = isStream
-                    ) { current, total ->
-                        runOnUiThread {
-                            progressDialog.setMessage("Restoring item $current of $total...")
-                        }
-                    }
-                    withContext(Dispatchers.Main) {
-                        progressDialog.dismiss()
-                        AlertDialog.Builder(this@SettingsActivity)
-                            .setTitle("Restore Successful")
-                            .setMessage("Successfully restored $restored items into your vault.")
-                            .setPositiveButton("OK", null)
-                            .show()
-                    }
-                } ?: run {
-                    withContext(Dispatchers.Main) {
-                        progressDialog.dismiss()
-                        Toast.makeText(this@SettingsActivity, "Failed to open selected backup file.", Toast.LENGTH_SHORT).show()
-                    }
-                }
-            } catch (e: Exception) {
-                withContext(Dispatchers.Main) {
-                    progressDialog.dismiss()
-                    AlertDialog.Builder(this@SettingsActivity)
-                        .setTitle("Restore Failed")
-                        .setMessage("Failed to restore backup: ${e.message}\nPlease ensure the passphrase is correct and the backup file is intact.")
-                        .setPositiveButton("OK", null)
-                        .show()
-                }
+        lifecycleScope.launch {
+            val count = withContext(Dispatchers.IO) {
+                VaultBackupManager.importBackup(this@SettingsActivity, sourceUri, pass, repo)
+            }
+            if (count >= 0) {
+                Toast.makeText(this@SettingsActivity, "Restored $count items into vault!", Toast.LENGTH_LONG).show()
+            } else {
+                Toast.makeText(this@SettingsActivity, "Failed restoring backup: incorrect password or invalid file.", Toast.LENGTH_LONG).show()
             }
         }
     }

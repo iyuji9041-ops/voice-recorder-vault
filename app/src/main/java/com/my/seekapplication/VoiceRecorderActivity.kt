@@ -312,13 +312,23 @@ class VoiceRecorderActivity : AppCompatActivity() {
         stopAudioPlayback()
         stopAudioRecording(save = false)
 
-        if (!VaultSecurityManager.hasDoorPasscode(this)) {
-            // First time setup for Door Passcode
-            showSetDoorPasscodeDialog()
-        } else {
-            // Prompt Door Passcode (Layer 1 of Triple Protection)
-            showVerifyDoorPasscodeDialog()
+        if (!com.my.seekapplication.setup.SetupWizardManager.isSetupCompleted(this)) {
+            val intent = Intent(this, com.my.seekapplication.setup.SetupWizardActivity::class.java)
+            startActivity(intent)
+            return
         }
+
+        if (VaultSecurityManager.isDoorLockedOut(this)) {
+            val sec = (VaultSecurityManager.getDoorLockoutRemainingMs(this) / 1000) + 1
+            AlertDialog.Builder(this)
+                .setTitle("Door Passcode Locked Out")
+                .setMessage("Too many failed attempts. Entrance locked for $sec seconds.")
+                .setPositiveButton("OK", null)
+                .show()
+            return
+        }
+
+        showVerifyDoorPasscodeDialog()
     }
 
     private fun showSetDoorPasscodeDialog() {
@@ -339,15 +349,16 @@ class VoiceRecorderActivity : AppCompatActivity() {
         val btnSubmit = dialog.findViewById<Button>(R.id.btnSubmitDoor)
 
         tvTitle.text = "Set Door Passcode (Layer 1)"
-        tvSubtitle.text = "Set a 4-digit entrance code to guard your vault gate"
+        tvSubtitle.text = "Set a 6-digit entrance code to guard your vault gate"
         btnForgot.visibility = View.GONE
 
         btnCancel.setOnClickListener { dialog.dismiss() }
 
         btnSubmit.setOnClickListener {
             val code = etInput.text.toString().trim()
-            if (code.length < 4) {
-                Toast.makeText(this, "Passcode must be at least 4 digits!", Toast.LENGTH_SHORT).show()
+            val validation = com.my.seekapplication.crypto.CredentialPolicy.validateDoorPasscode(code)
+            if (validation is com.my.seekapplication.crypto.CredentialPolicy.ValidationResult.Invalid) {
+                Toast.makeText(this, validation.reason, Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
@@ -361,6 +372,12 @@ class VoiceRecorderActivity : AppCompatActivity() {
     }
 
     private fun showVerifyDoorPasscodeDialog() {
+        if (VaultSecurityManager.isDoorLockedOut(this)) {
+            val sec = (VaultSecurityManager.getDoorLockoutRemainingMs(this) / 1000) + 1
+            Toast.makeText(this, "Door locked out for $sec seconds.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
         val dialog = Dialog(this)
         dialog.setContentView(R.layout.dialog_door_passcode)
         dialog.window?.let { window ->
@@ -390,8 +407,17 @@ class VoiceRecorderActivity : AppCompatActivity() {
                 launchDashboardGate()
             } else {
                 etInput.text.clear()
-                Toast.makeText(this, "Incorrect Door Passcode!", Toast.LENGTH_SHORT).show()
-                try { IntruderCamera.takeSecuritySelfie(this) } catch (ignored: Exception) {}
+                if (VaultSecurityManager.isDoorLockedOut(this)) {
+                    dialog.dismiss()
+                    val sec = (VaultSecurityManager.getDoorLockoutRemainingMs(this) / 1000) + 1
+                    AlertDialog.Builder(this)
+                        .setTitle("Door Locked Out")
+                        .setMessage("Too many failed attempts. Entrance locked for $sec seconds.")
+                        .setPositiveButton("OK", null)
+                        .show()
+                } else {
+                    Toast.makeText(this, "Incorrect Door Passcode!", Toast.LENGTH_SHORT).show()
+                }
             }
         }
 
@@ -404,11 +430,16 @@ class VoiceRecorderActivity : AppCompatActivity() {
     }
 
     // ---------------------------------------------------------------------------------------------
-    // MASTER EMERGENCY PASSWORD RECOVERY (Security Question)
+    // MASTER EMERGENCY PASSWORD RECOVERY (OFFLINE RECOVERY CODE)
     // ---------------------------------------------------------------------------------------------
 
     private fun showMasterEmergencyRecoveryDialog() {
         if (isFinishing || isDestroyed) return
+        if (VaultSecurityManager.isRecoveryLockedOut(this)) {
+            val sec = (VaultSecurityManager.getRecoveryLockoutRemainingMs(this) / 1000) + 1
+            Toast.makeText(this, "Recovery locked out. Please wait $sec seconds.", Toast.LENGTH_LONG).show()
+            return
+        }
 
         val dialog = Dialog(this)
         dialog.setContentView(R.layout.dialog_security_recovery)
@@ -420,28 +451,36 @@ class VoiceRecorderActivity : AppCompatActivity() {
         }
 
         val tvTitle = dialog.findViewById<TextView>(R.id.tvRecoveryTitle)
+        val tvSubtitle = dialog.findViewById<TextView>(R.id.tvRecoverySubtitle)
         val tvQuestion = dialog.findViewById<TextView>(R.id.tvQuestionDisplay)
         val etAnswer = dialog.findViewById<EditText>(R.id.etRecoveryAnswer)
         val btnCancel = dialog.findViewById<Button>(R.id.btnCancelRecovery)
         val btnSubmit = dialog.findViewById<Button>(R.id.btnSubmitRecovery)
 
         tvTitle.text = "Emergency Vault Recovery"
-        val q = if (VaultSecurityManager.hasSecurityQuestion(this)) {
-            VaultSecurityManager.getSecurityQuestion(this)
-        } else {
-            "What was your first school or favorite keyword?"
-        }
-        tvQuestion.text = "Security Question:\n$q"
+        tvSubtitle.text = "Enter your 16-character offline recovery code"
+        tvQuestion.text = "Recovery Code:"
+        etAnswer.hint = "XXXX-XXXX-XXXX-XXXX"
 
         btnSubmit.setOnClickListener {
-            val ans = etAnswer.text.toString().trim()
-            if (VaultSecurityManager.verifySecurityAnswer(this, ans) || !VaultSecurityManager.hasSecurityQuestion(this)) {
+            val code = etAnswer.text.toString().trim()
+            if (code.length < 10) {
+                Toast.makeText(this, "Please enter your 16-character recovery code.", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            if (VaultSecurityManager.recoverWithRecoveryCode(this, code)) {
                 dialog.dismiss()
                 Toast.makeText(this, "Identity Verified! Choose what to reset.", Toast.LENGTH_SHORT).show()
                 showChooseResetTargetDialog()
             } else {
-                Toast.makeText(this, "Incorrect answer!", Toast.LENGTH_SHORT).show()
-                try { IntruderCamera.takeSecuritySelfie(this) } catch (ignored: Exception) {}
+                if (VaultSecurityManager.isRecoveryLockedOut(this)) {
+                    dialog.dismiss()
+                    val sec = (VaultSecurityManager.getRecoveryLockoutRemainingMs(this) / 1000) + 1
+                    Toast.makeText(this, "Too many wrong attempts. Recovery locked for $sec seconds.", Toast.LENGTH_LONG).show()
+                } else {
+                    Toast.makeText(this, "Invalid Recovery Code!", Toast.LENGTH_SHORT).show()
+                }
             }
         }
 

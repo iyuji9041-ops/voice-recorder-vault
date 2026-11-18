@@ -2,28 +2,33 @@ package com.my.seekapplication
 
 import android.content.Context
 import android.util.Log
+import com.my.seekapplication.crypto.CredentialPolicy
+import com.my.seekapplication.crypto.IntruderAuditLog
+import com.my.seekapplication.crypto.IntruderPhotoCrypto
+import com.my.seekapplication.crypto.LockoutManager
 import com.my.seekapplication.crypto.SafeBase64
 import com.my.seekapplication.crypto.VaultKeyManager
 import com.my.seekapplication.data.VaultMigrationHelper
 import com.my.seekapplication.data.VaultRepository
 import com.my.seekapplication.data.VaultSession
-import org.json.JSONObject
+import com.my.seekapplication.setup.SetupWizardManager
 import java.io.File
 import java.security.SecureRandom
-import javax.crypto.SecretKey
 import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.PBEKeySpec
 
 /**
  * VaultSecurityManager: Central security facade for authentication, session management,
- * and encrypted private vault operations.
+ * brute-force lockout, recovery, and encrypted private vault operations.
  *
  * Security Enhancements:
  * 1. Storage is strictly in private app sandbox (filesDir/vault/real and filesDir/vault/decoy).
- * 2. Public Documents storage and plaintext .vault_config are eliminated.
- * 3. Master Key is dual-wrapped with Android Keystore AES-256 and PBKDF2-HMAC-SHA256 (600,000 iterations).
- * 4. Fake/Decoy credential opens an isolated, independent decoy repository with constant-time verification.
- * 5. Automatic wipe of application cache upon locking.
+ * 2. Master Key is dual-wrapped with Android Keystore AES-256 and PBKDF2-HMAC-SHA256 (600,000 iterations).
+ * 3. Constant-time comparisons using CredentialPolicy.constantTimeEquals.
+ * 4. Hardware monotonic exponential backoff lockout across reboots (LockoutManager).
+ * 5. Offline Recovery Slot unwrap (recovery_wrapped_key in auth.json).
+ * 6. Intruder selfie capture on failed unlock attempts without UI hint.
+ * 7. Decoy credential opens an isolated decoy repository with zero leak of fake mode.
  */
 object VaultSecurityManager {
 
@@ -52,10 +57,12 @@ object VaultSecurityManager {
     enum class PasswordCheckResult {
         REAL,
         DECOY,
-        INVALID
+        INVALID,
+        LOCKED_OUT
     }
 
     private fun getKeyManager(context: Context): VaultKeyManager = VaultKeyManager(context)
+    private fun getLockoutManager(context: Context): LockoutManager = LockoutManager(context)
 
     // ---------------------------------------------------------------------------------------------
     // HOLD DURATION SETTING (5s, 7s, 10s, 15s)
@@ -91,11 +98,39 @@ object VaultSecurityManager {
     }
 
     // ---------------------------------------------------------------------------------------------
+    // LOCKOUT CHECKS & TIMERS
+    // ---------------------------------------------------------------------------------------------
+
+    fun isDoorLockedOut(context: Context): Boolean {
+        return getLockoutManager(context).isLockedOut(LockoutManager.Target.DOOR)
+    }
+
+    fun getDoorLockoutRemainingMs(context: Context): Long {
+        return getLockoutManager(context).getRemainingLockoutMs(LockoutManager.Target.DOOR)
+    }
+
+    fun isVaultLockedOut(context: Context): Boolean {
+        return getLockoutManager(context).isLockedOut(LockoutManager.Target.VAULT)
+    }
+
+    fun getVaultLockoutRemainingMs(context: Context): Long {
+        return getLockoutManager(context).getRemainingLockoutMs(LockoutManager.Target.VAULT)
+    }
+
+    fun isRecoveryLockedOut(context: Context): Boolean {
+        return getLockoutManager(context).isLockedOut(LockoutManager.Target.RECOVERY)
+    }
+
+    fun getRecoveryLockoutRemainingMs(context: Context): Long {
+        return getLockoutManager(context).getRemainingLockoutMs(LockoutManager.Target.RECOVERY)
+    }
+
+    // ---------------------------------------------------------------------------------------------
     // VAULT PASSWORDS & UNLOCKING
     // ---------------------------------------------------------------------------------------------
 
     fun hasPassword(context: Context): Boolean {
-        return getKeyManager(context).isVaultConfigured()
+        return SetupWizardManager.isSetupCompleted(context) && getKeyManager(context).isVaultConfigured()
     }
 
     fun hasDecoyPassword(context: Context): Boolean {
@@ -124,13 +159,21 @@ object VaultSecurityManager {
     /**
      * Authenticates user entered passphrase.
      * Evaluates real and decoy through symmetric operations and opens VaultSession on success.
+     * Protects with persistent exponential backoff lockout and triggers silent camera captures.
      */
     fun checkPassword(context: Context, entered: String): PasswordCheckResult {
+        val lockout = getLockoutManager(context)
+        if (lockout.isLockedOut(LockoutManager.Target.VAULT)) {
+            return PasswordCheckResult.LOCKED_OUT
+        }
+
         val clean = entered.trim()
         val keyManager = getKeyManager(context)
 
         return when (val result = keyManager.unlock(clean)) {
             is VaultKeyManager.UnlockResult.Success -> {
+                lockout.recordSuccessfulAttempt(LockoutManager.Target.VAULT)
+
                 val vaultSubDir = if (result.isDecoy) "vault/decoy" else "vault/real"
                 val vaultDir = File(context.filesDir, vaultSubDir)
                 val repo = VaultRepository(vaultDir, result.masterKey, isDecoy = result.isDecoy)
@@ -143,10 +186,20 @@ object VaultSecurityManager {
 
                 if (result.isDecoy) PasswordCheckResult.DECOY else PasswordCheckResult.REAL
             }
-            is VaultKeyManager.UnlockResult.InvalidCredential -> PasswordCheckResult.INVALID
+            is VaultKeyManager.UnlockResult.InvalidCredential,
             is VaultKeyManager.UnlockResult.Error -> {
-                Log.e(TAG, "Unlock error: ${result.message}")
-                PasswordCheckResult.INVALID
+                val status = lockout.recordFailedAttempt(LockoutManager.Target.VAULT)
+                try {
+                    IntruderCamera.captureIntruderSelfie(context, "VAULT", status.failedAttempts)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed triggering intruder selfie: ${e.message}", e)
+                }
+
+                if (status.isLockedOut) {
+                    PasswordCheckResult.LOCKED_OUT
+                } else {
+                    PasswordCheckResult.INVALID
+                }
             }
         }
     }
@@ -188,16 +241,35 @@ object VaultSecurityManager {
     }
 
     fun checkDoorPasscode(context: Context, entered: String): Boolean {
+        val lockout = getLockoutManager(context)
+        if (lockout.isLockedOut(LockoutManager.Target.DOOR)) {
+            return false
+        }
+
         val clean = entered.trim()
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val hash = prefs.getString(KEY_DOOR_HASH, null) ?: return true
         val saltStr = prefs.getString(KEY_DOOR_SALT, null) ?: return true
         val salt = SafeBase64.decode(saltStr)
-        return hashWithSalt(clean, salt) == hash
+        val computedHash = hashWithSalt(clean, salt)
+
+        val isValid = CredentialPolicy.constantTimeEquals(computedHash, hash)
+        if (isValid) {
+            lockout.recordSuccessfulAttempt(LockoutManager.Target.DOOR)
+            return true
+        } else {
+            val status = lockout.recordFailedAttempt(LockoutManager.Target.DOOR)
+            try {
+                IntruderCamera.captureIntruderSelfie(context, "DOOR", status.failedAttempts)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed triggering intruder selfie for door: ${e.message}", e)
+            }
+            return false
+        }
     }
 
     // ---------------------------------------------------------------------------------------------
-    // PASSWORD RECOVERY / RESET (Security Question & Answer)
+    // PASSWORD RECOVERY / RESET (Security Question & Offline Recovery Code)
     // ---------------------------------------------------------------------------------------------
 
     fun hasSecurityQuestion(context: Context): Boolean {
@@ -228,12 +300,116 @@ object VaultSecurityManager {
     }
 
     fun verifySecurityAnswer(context: Context, enteredAnswer: String): Boolean {
+        val lockout = getLockoutManager(context)
+        if (lockout.isLockedOut(LockoutManager.Target.RECOVERY)) {
+            return false
+        }
+
         val clean = enteredAnswer.trim().lowercase()
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val hash = prefs.getString(KEY_SEC_ANSWER_HASH, null) ?: return false
         val saltStr = prefs.getString(KEY_SEC_ANSWER_SALT, null) ?: return false
         val salt = SafeBase64.decode(saltStr)
-        return hashWithSalt(clean, salt) == hash
+        val computedHash = hashWithSalt(clean, salt)
+
+        val isValid = CredentialPolicy.constantTimeEquals(computedHash, hash)
+        if (isValid) {
+            lockout.recordSuccessfulAttempt(LockoutManager.Target.RECOVERY)
+            return true
+        } else {
+            val status = lockout.recordFailedAttempt(LockoutManager.Target.RECOVERY)
+            try {
+                IntruderCamera.captureIntruderSelfie(context, "RECOVERY", status.failedAttempts)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed triggering intruder selfie for recovery: ${e.message}", e)
+            }
+            return false
+        }
+    }
+
+    fun hasRecoverySlot(context: Context): Boolean {
+        return getKeyManager(context).hasRecoveryConfigured()
+    }
+
+    /**
+     * Unwraps real Master Key using the 16-character offline recovery code and opens session.
+     */
+    fun recoverWithRecoveryCode(context: Context, recoveryCode: String): Boolean {
+        val lockout = getLockoutManager(context)
+        if (lockout.isLockedOut(LockoutManager.Target.RECOVERY)) {
+            return false
+        }
+
+        return try {
+            val masterKey = getKeyManager(context).unwrapMasterKeyWithRecovery(recoveryCode)
+            val vaultDir = File(context.filesDir, "vault/real")
+            val repo = VaultRepository(vaultDir, masterKey, isDecoy = false)
+            VaultSession.open(repo)
+
+            lockout.recordSuccessfulAttempt(LockoutManager.Target.RECOVERY)
+            true
+        } catch (e: Exception) {
+            val status = lockout.recordFailedAttempt(LockoutManager.Target.RECOVERY)
+            try {
+                IntruderCamera.captureIntruderSelfie(context, "RECOVERY", status.failedAttempts)
+            } catch (ignored: Exception) {}
+            false
+        }
+    }
+
+    /**
+     * Resets the real vault key using the recovery code, preserving encrypted files.
+     */
+    fun resetVaultPasswordWithRecoveryCode(
+        context: Context,
+        recoveryCode: String,
+        newKey: String
+    ): Boolean {
+        val lockout = getLockoutManager(context)
+        if (lockout.isLockedOut(LockoutManager.Target.RECOVERY)) {
+            return false
+        }
+
+        val keyManager = getKeyManager(context)
+        return try {
+            val masterKey = keyManager.unwrapMasterKeyWithRecovery(recoveryCode)
+            // Re-wrap master key with new credential
+            keyManager.setPassword(newKey.trim(), isReal = true, existingMasterKey = masterKey)
+
+            // Re-wrap recovery slot with same code to keep it valid
+            val newSlot = keyManager.wrapMasterKeyForRecovery(masterKey, recoveryCode)
+            keyManager.saveRecoverySlot(newSlot)
+
+            // Re-encrypt intruder private key with master key
+            IntruderPhotoCrypto.initializeKeypair(context, masterKey)
+
+            val vaultDir = File(context.filesDir, "vault/real")
+            val repo = VaultRepository(vaultDir, masterKey, isDecoy = false)
+            VaultSession.open(repo)
+
+            lockout.recordSuccessfulAttempt(LockoutManager.Target.RECOVERY)
+            true
+        } catch (e: Exception) {
+            val status = lockout.recordFailedAttempt(LockoutManager.Target.RECOVERY)
+            try {
+                IntruderCamera.captureIntruderSelfie(context, "RECOVERY", status.failedAttempts)
+            } catch (ignored: Exception) {}
+            false
+        }
+    }
+
+    /**
+     * Complete destructive factory reset: wipes keys, files, audit logs, and resets setup.
+     */
+    fun wipeVaultCompletely(context: Context): Boolean {
+        lockVault(context)
+        val wiped = getKeyManager(context).wipeVaultCompletely()
+        SetupWizardManager.resetSetup(context)
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().clear().apply()
+        LockoutManager(context).resetAll()
+        IntruderAuditLog.clearLogs(context)
+        VaultSession.wipeAppCache(context)
+        return wiped
     }
 
     // ---------------------------------------------------------------------------------------------

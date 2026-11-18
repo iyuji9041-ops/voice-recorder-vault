@@ -41,7 +41,7 @@ import java.io.InputStream
  * 4. Android 16 Window Insets: avoids UI overlap with status bar / navigation bar.
  * 5. Decoy mode always shows an empty state.
  */
-class VaultGalleryActivity : AppCompatActivity() {
+class VaultGalleryActivity : BaseVaultActivity() {
 
     private val tag = "VaultGalleryActivity"
 
@@ -113,29 +113,17 @@ class VaultGalleryActivity : AppCompatActivity() {
         }
 
         addPhotoButton.setOnClickListener {
-            if (isDecoy) {
-                Toast.makeText(this, "Cannot add files in Fake Vault!", Toast.LENGTH_SHORT).show()
-            } else {
-                openPicker()
-            }
+            openPicker()
         }
 
         // Initialize active tab styling
         switchTab("Photos")
-
-        if (isDecoy) {
-            emptyStateLayout.visibility = View.VISIBLE
-            photosRecyclerView.visibility = View.GONE
-        } else {
-            loadHiddenFiles()
-        }
+        loadHiddenFiles()
     }
 
     override fun onResume() {
         super.onResume()
-        if (!isDecoy) {
-            loadHiddenFiles()
-        }
+        loadHiddenFiles()
     }
 
     // Dynamic pill tab switching
