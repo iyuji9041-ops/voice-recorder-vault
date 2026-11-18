@@ -120,26 +120,13 @@
             android:fontFamily="monospace"
             android:textStyle="bold" />
 
-        <!-- Sound Waveform Simulation Bars -->
-        <LinearLayout
-            android:id="@+id/waveformLayout"
+        <!-- Real Dynamic Sound Waveform View -->
+        <com.my.seekapplication.recorder.WaveformView
+            android:id="@+id/waveformView"
             android:layout_width="match_parent"
-            android:layout_height="36dp"
+            android:layout_height="44dp"
             android:layout_marginTop="12dp"
-            android:layout_marginBottom="8dp"
-            android:gravity="center"
-            android:orientation="horizontal">
-
-            <View android:id="@+id/waveBar1" android:layout_width="4dp" android:layout_height="10dp" android:layout_margin="3dp" android:background="#44FFFFFF" />
-            <View android:id="@+id/waveBar2" android:layout_width="4dp" android:layout_height="18dp" android:layout_margin="3dp" android:background="#66FFFFFF" />
-            <View android:id="@+id/waveBar3" android:layout_width="4dp" android:layout_height="26dp" android:layout_margin="3dp" android:background="#88FFFFFF" />
-            <View android:id="@+id/waveBar4" android:layout_width="4dp" android:layout_height="16dp" android:layout_margin="3dp" android:background="#AAFFFFFF" />
-            <View android:id="@+id/waveBar5" android:layout_width="4dp" android:layout_height="32dp" android:layout_margin="3dp" android:background="#FF3B30" />
-            <View android:id="@+id/waveBar6" android:layout_width="4dp" android:layout_height="20dp" android:layout_margin="3dp" android:background="#AAFFFFFF" />
-            <View android:id="@+id/waveBar7" android:layout_width="4dp" android:layout_height="28dp" android:layout_margin="3dp" android:background="#88FFFFFF" />
-            <View android:id="@+id/waveBar8" android:layout_width="4dp" android:layout_height="14dp" android:layout_margin="3dp" android:background="#66FFFFFF" />
-            <View android:id="@+id/waveBar9" android:layout_width="4dp" android:layout_height="8dp" android:layout_margin="3dp" android:background="#44FFFFFF" />
-        </LinearLayout>
+            android:layout_marginBottom="8dp" />
 
         <TextView
             android:id="@+id/tvRecordStatus"
@@ -150,15 +137,30 @@
             android:textSize="13sp" />
     </LinearLayout>
 
-    <!-- Bottom Controls: Big Record Button -->
+    <!-- Bottom Controls: Big Record Button with Save and Cancel options -->
     <RelativeLayout
         android:id="@+id/bottomControlSection"
         android:layout_width="match_parent"
         android:layout_height="105dp"
-        android:layout_alignParentBottom="true"
-        android:gravity="center">
+        android:layout_alignParentBottom="true">
 
-        <!-- Outer Ring -->
+        <!-- Discard / Cancel Button (Left) -->
+        <ImageView
+            android:id="@+id/btnCancelRecording"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_toStartOf="@+id/btnRecordOuter"
+            android:layout_centerVertical="true"
+            android:layout_marginEnd="32dp"
+            android:background="@drawable/bg_glass_input"
+            android:padding="12dp"
+            android:src="@drawable/ic_delete_vector"
+            app:tint="#FF5252"
+            android:visibility="gone"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <!-- Outer Ring (Center Record Button) -->
         <RelativeLayout
             android:id="@+id/btnRecordOuter"
             android:layout_width="84dp"
@@ -185,9 +187,25 @@
                     app:tint="#FFFFFF" />
             </RelativeLayout>
         </RelativeLayout>
+
+        <!-- Save / Done Button (Right) -->
+        <ImageView
+            android:id="@+id/btnSaveRecording"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_toEndOf="@+id/btnRecordOuter"
+            android:layout_centerVertical="true"
+            android:layout_marginStart="32dp"
+            android:background="@drawable/bg_glass_input"
+            android:padding="12dp"
+            android:src="@drawable/ic_check_vector"
+            app:tint="#00E676"
+            android:visibility="gone"
+            android:clickable="true"
+            android:focusable="true" />
     </RelativeLayout>
 
-    <!-- Recordings List -->
+    <!-- Recordings List Header -->
     <TextView
         android:id="@+id/tvRecentHeader"
         android:layout_width="wrap_content"
