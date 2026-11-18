@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 
 /**
  * BaseVaultActivity: Base class for all authenticated Vault screens.
@@ -44,11 +45,7 @@ abstract class BaseVaultActivity : AppCompatActivity() {
             addAction(AutoLockManager.ACTION_VAULT_LOCKED)
             addAction(Intent.ACTION_SCREEN_OFF)
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(lockReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            registerReceiver(lockReceiver, filter)
-        }
+        ContextCompat.registerReceiver(this, lockReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
     }
 
     override fun onStart() {
